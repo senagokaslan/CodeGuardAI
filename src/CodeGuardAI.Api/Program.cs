@@ -1,6 +1,11 @@
+using CodeGuardAI.Api.Errors;
+
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers();
+builder.Services
+    .AddControllers()
+    .ConfigureApiBehaviorOptions(options =>
+        options.InvalidModelStateResponseFactory = ApiProblemDetailsFactory.CreateValidationResponse);
 builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
 
