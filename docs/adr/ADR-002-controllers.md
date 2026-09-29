@@ -10,7 +10,7 @@ Planlanan API; Project, Scan, ReviewRun, Finding ve TestCase etrafında büyüye
 
 ## Karar
 
-HTTP endpoint'leri ASP.NET Core controller sınıflarıyla tanımlanacaktır. API projesi bugün yalnız `AddControllers` ve `MapControllers` ile controller altyapısını kurar; health veya feature endpoint'i eklemez.
+HTTP endpoint'leri ASP.NET Core controller sınıflarıyla tanımlanacaktır. Gün 2'de API projesi yalnız `AddControllers` ve `MapControllers` ile controller altyapısını kurmuştur. Gün 3'te ilk dikey dilim olarak typed response kullanan, dış bağımlılık veya secret ayrıntısı döndürmeyen `GET /health` endpoint'i eklenmiştir.
 
 Controller sorumluluğu şunlarla sınırlıdır:
 
@@ -30,11 +30,11 @@ Controller doğrudan DbContext, Gemini client, filesystem, process veya MCP adap
 
 ## Cancellation ve hata davranışı
 
-Action metotları I/O veya workflow çağırdığında `CancellationToken` alıp Application'a iletecektir. Cancellation retry edilmez veya provider hatası diye maskelenmez. Validation, not-found, conflict, unprocessable input, provider, timeout ve cancellation tek bir genel 500 cevabında birleştirilmez. Problem Details middleware/mapping uygulaması sonraki günlük kapsamda eklenecek; bugün sahte endpoint veya erken feature kodu yazılmayacaktır.
+Action metotları I/O veya workflow çağırdığında `CancellationToken` alıp Application'a iletecektir. Cancellation retry edilmez veya provider hatası diye maskelenmez. Validation, not-found, conflict, unprocessable input, provider, timeout ve cancellation tek bir genel 500 cevabında birleştirilmez. Gün 3'te `AddProblemDetails`, exception handler ve status-code pages composition root'a eklenmiştir; feature'a özgü hata eşlemesi ilgili contract gününde genişletilecektir.
 
 ## Başarısızlık davranışı ve doğrulama
 
-Controller'ın Infrastructure servisini doğrudan kullanması, business logic taşıması veya cancellation token'ı yutması bu ADR ihlalidir. Bugün API assembly'sinin test projesinden keşfedilmesi ve solution'ın warnings-as-errors ile derlenmesi doğrulanır; endpoint davranış testleri ilgili feature günlerinde eklenir.
+Controller'ın Infrastructure servisini doğrudan kullanması, business logic taşıması veya cancellation token'ı yutması bu ADR ihlalidir. API assembly'sinin test projesinden keşfedilmesi ve solution'ın warnings-as-errors ile derlenmesi korunur. Gün 3 integration testleri health contract'ını, güvenli 404 Problem Details cevabını ve OpenAPI'nin yalnız Development ortamında sunulmasını doğrular.
 
 ## Alternatif
 

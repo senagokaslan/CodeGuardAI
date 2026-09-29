@@ -5,4 +5,9 @@
     <ProjectReference Include="..\CodeGuardAI.Infrastructure\CodeGuardAI.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.3" />
+    <PackageReference Include="Microsoft.OpenApi" Version="2.12.2" />
+  </ItemGroup>
+
 </Project>
