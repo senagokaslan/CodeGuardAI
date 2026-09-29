@@ -71,7 +71,9 @@ public sealed class ContractValidationTests
         return new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
             {
-                builder.UseEnvironment(Environments.Development);
+                builder
+                    .UseEnvironment(Environments.Development)
+                    .UseCodeGuardTestOptions();
                 builder.ConfigureServices(services =>
                     services
                         .AddControllers()

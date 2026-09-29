@@ -75,6 +75,9 @@ public sealed class HealthEndpointTests
     private static WebApplicationFactory<Program> CreateFactory(string environment)
     {
         return new WebApplicationFactory<Program>()
-            .WithWebHostBuilder(builder => builder.UseEnvironment(environment));
+            .WithWebHostBuilder(builder =>
+                builder
+                    .UseEnvironment(environment)
+                    .UseCodeGuardTestOptions());
     }
 }
