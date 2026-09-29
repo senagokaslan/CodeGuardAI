@@ -1,0 +1,7 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\CodeGuardAI.Domain\CodeGuardAI.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,11 @@
+**/bin/
+**/obj/
+.vs/
+TestResults/
+*.coverage
+*.user
+*.suo
+.env
+*.pem
+*.key
+appsettings.Local.json
