@@ -1,5 +1,5 @@
+using CodeGuardAI.Api;
 using CodeGuardAI.Api.Errors;
-using CodeGuardAI.Application.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -9,20 +9,7 @@ builder.Services
         options.InvalidModelStateResponseFactory = ApiProblemDetailsFactory.CreateValidationResponse);
 builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
-builder.Services
-    .AddOptions<DatabaseOptions>()
-    .Bind(builder.Configuration.GetSection(DatabaseOptions.SectionName))
-    .Validate(
-        options => !string.IsNullOrWhiteSpace(options.ConnectionString),
-        "Configuration key Database:ConnectionString is required.")
-    .ValidateOnStart();
-builder.Services
-    .AddOptions<GeminiOptions>()
-    .Bind(builder.Configuration.GetSection(GeminiOptions.SectionName))
-    .Validate(
-        options => !string.IsNullOrWhiteSpace(options.ApiKey),
-        "Configuration key Gemini:ApiKey is required.")
-    .ValidateOnStart();
+builder.Services.AddCodeGuardServices(builder.Configuration);
 
 var app = builder.Build();
 

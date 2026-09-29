@@ -16,6 +16,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\CodeGuardAI.Application\CodeGuardAI.Application.csproj" />
     <ProjectReference Include="..\..\src\CodeGuardAI.Domain\CodeGuardAI.Domain.csproj" />
+    <ProjectReference Include="..\..\src\CodeGuardAI.Infrastructure\CodeGuardAI.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>
