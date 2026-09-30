@@ -2,7 +2,9 @@ using CodeGuardAI.Application.Options;
 using CodeGuardAI.Application.Projects;
 using CodeGuardAI.Application.Repositories;
 using CodeGuardAI.Application.Context;
+using CodeGuardAI.Application.LLM;
 using CodeGuardAI.Application.Tools;
+using CodeGuardAI.Infrastructure.LLM;
 using CodeGuardAI.Infrastructure.Persistence;
 using CodeGuardAI.Infrastructure.Persistence.Queries;
 using CodeGuardAI.Infrastructure.Repositories;
@@ -39,6 +41,17 @@ public static class DependencyInjection
         services.AddSingleton(new RepositoryContextOptions());
         services.AddScoped<IFileReadTool, SafeFileReadTool>();
         services.AddScoped<IRepositoryContextBuilder, RepositoryContextBuilder>();
+        services
+            .AddHttpClient<GeminiHttpClient>((serviceProvider, client) =>
+            {
+                var geminiOptions = serviceProvider
+                    .GetRequiredService<IOptions<GeminiOptions>>()
+                    .Value;
+                client.BaseAddress = new Uri(geminiOptions.BaseAddress, UriKind.Absolute);
+                client.Timeout = Timeout.InfiniteTimeSpan;
+            })
+            .RedactLoggedHeaders(["x-goog-api-key"]);
+        services.AddScoped<ILLMProvider, GeminiProvider>();
 
         return services;
     }

@@ -2,6 +2,7 @@ using CodeGuardAI.Application.Options;
 using CodeGuardAI.Application.Projects;
 using CodeGuardAI.Application.Repositories;
 using CodeGuardAI.Infrastructure;
+using CodeGuardAI.Infrastructure.LLM;
 
 namespace CodeGuardAI.Api;
 
@@ -22,8 +23,14 @@ internal static class DependencyInjection
             .AddOptions<GeminiOptions>()
             .Bind(configuration.GetSection(GeminiOptions.SectionName))
             .Validate(
-                options => !string.IsNullOrWhiteSpace(options.ApiKey),
-                "Configuration key Gemini:ApiKey is required.")
+                options => !string.IsNullOrWhiteSpace(options.ApiKey) &&
+                           Uri.TryCreate(options.BaseAddress, UriKind.Absolute, out var baseAddress) &&
+                           baseAddress.Scheme == Uri.UriSchemeHttps &&
+                           options.MaxRetries is >= 0 and <= 2 &&
+                           options.RetryBaseDelayMilliseconds >= 0 &&
+                           options.MaxRetryJitterMilliseconds >= 0 &&
+                           options.MaxRetryDelayMilliseconds > 0,
+                "Gemini configuration is invalid; Gemini:ApiKey is required and retry limits must be bounded.")
             .ValidateOnStart();
         services
             .AddOptions<ScanOptions>()
