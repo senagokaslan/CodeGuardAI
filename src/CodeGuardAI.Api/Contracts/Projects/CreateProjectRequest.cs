@@ -15,6 +15,6 @@ public sealed class CreateProjectRequest
     [StringLength(
         ProjectContractLimits.RepositoryPathMaxLength,
         MinimumLength = 1,
-        ErrorMessage = "Repository path must be between 1 and 4096 characters.")]
+        ErrorMessage = "Repository path must be between 1 and 2048 characters.")]
     public string? RepositoryPath { get; init; }
 }

@@ -144,6 +144,14 @@ $env:ASPNETCORE_ENVIRONMENT = "Development"
 dotnet ef database update --project src/CodeGuardAI.Infrastructure --startup-project src/CodeGuardAI.Api --connection $env:CODEGUARD_TEST_DATABASE_CONNECTION_STRING
 ```
 
+Gerçek PostgreSQL kullanan ve `Category=Database` trait'iyle ayrılan Project uçtan uca testini çalıştır:
+
+```powershell
+dotnet test tests/CodeGuardAI.IntegrationTests --filter "Category=Database"
+```
+
+Test güvenlik için connection string içindeki database adının `_test` ile bitmesini zorunlu tutar. Connection string tanımlı değilse test normal test koşusunda gerekçesiyle skip edilir; fake/in-memory provider'a düşmez.
+
 Deterministik integration test başlangıcı için test database sahibiyle yalnız `public` şemasını sıfırla; development database'e karşı çalıştırma:
 
 ```powershell

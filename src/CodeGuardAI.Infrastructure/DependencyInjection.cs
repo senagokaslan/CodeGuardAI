@@ -1,5 +1,7 @@
 using CodeGuardAI.Application.Options;
+using CodeGuardAI.Application.Projects;
 using CodeGuardAI.Infrastructure.Persistence;
+using CodeGuardAI.Infrastructure.Persistence.Queries;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -25,6 +27,8 @@ public static class DependencyInjection
 
             options.UseNpgsql(connectionString);
         });
+        services.AddScoped<IProjectWriter, EfProjectWriter>();
+        services.AddScoped<IProjectQueries, EfProjectQueries>();
 
         return services;
     }

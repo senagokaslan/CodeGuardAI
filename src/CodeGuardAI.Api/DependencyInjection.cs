@@ -1,4 +1,5 @@
 using CodeGuardAI.Application.Options;
+using CodeGuardAI.Application.Projects;
 using CodeGuardAI.Infrastructure;
 
 namespace CodeGuardAI.Api;
@@ -25,6 +26,8 @@ internal static class DependencyInjection
             .ValidateOnStart();
 
         services.AddCodeGuardPersistence();
+        services.AddSingleton(TimeProvider.System);
+        services.AddScoped<IProjectService, ProjectService>();
         return services;
     }
 }
