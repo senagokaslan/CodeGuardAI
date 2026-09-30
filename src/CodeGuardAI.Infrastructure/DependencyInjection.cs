@@ -1,9 +1,12 @@
 using CodeGuardAI.Application.Options;
 using CodeGuardAI.Application.Projects;
 using CodeGuardAI.Application.Repositories;
+using CodeGuardAI.Application.Context;
+using CodeGuardAI.Application.Tools;
 using CodeGuardAI.Infrastructure.Persistence;
 using CodeGuardAI.Infrastructure.Persistence.Queries;
 using CodeGuardAI.Infrastructure.Repositories;
+using CodeGuardAI.Infrastructure.Tools;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -33,6 +36,9 @@ public static class DependencyInjection
         services.AddScoped<IProjectQueries, EfProjectQueries>();
         services.AddSingleton<SafePathResolver>();
         services.AddScoped<IRepositoryScanner, RepositoryScanner>();
+        services.AddSingleton(new RepositoryContextOptions());
+        services.AddScoped<IFileReadTool, SafeFileReadTool>();
+        services.AddScoped<IRepositoryContextBuilder, RepositoryContextBuilder>();
 
         return services;
     }
