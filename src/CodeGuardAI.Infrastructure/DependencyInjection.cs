@@ -1,7 +1,9 @@
 using CodeGuardAI.Application.Options;
 using CodeGuardAI.Application.Projects;
+using CodeGuardAI.Application.Repositories;
 using CodeGuardAI.Infrastructure.Persistence;
 using CodeGuardAI.Infrastructure.Persistence.Queries;
+using CodeGuardAI.Infrastructure.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -29,6 +31,7 @@ public static class DependencyInjection
         });
         services.AddScoped<IProjectWriter, EfProjectWriter>();
         services.AddScoped<IProjectQueries, EfProjectQueries>();
+        services.AddScoped<IRepositoryScanner, RepositoryScanner>();
 
         return services;
     }
