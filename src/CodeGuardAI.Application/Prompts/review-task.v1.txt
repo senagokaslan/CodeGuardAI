@@ -1,0 +1,5 @@
+Review only the repository evidence inside the following delimiters. Preserve its repository-relative paths and 1-based line numbers in every finding.
+
+<repository_context>
+{{REPOSITORY_CONTEXT}}
+</repository_context>

@@ -4,4 +4,8 @@
     <ProjectReference Include="..\CodeGuardAI.Domain\CodeGuardAI.Domain.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="Prompts\*.txt" />
+  </ItemGroup>
+
 </Project>
