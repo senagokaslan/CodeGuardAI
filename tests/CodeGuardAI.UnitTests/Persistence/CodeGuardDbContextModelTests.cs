@@ -7,7 +7,9 @@ using CodeGuardAI.Infrastructure;
 using CodeGuardAI.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -112,6 +114,36 @@ public sealed class CodeGuardDbContextModelTests
         Assert.Same(first, sameScope);
         Assert.NotSame(first, second);
         Assert.Equal("Npgsql.EntityFrameworkCore.PostgreSQL", first.Database.ProviderName);
+    }
+
+    [Fact]
+    public void Initial_migration_script_contains_expected_schema_contract()
+    {
+        using var context = CreateContext();
+        var migration = Assert.Single(context.Database.GetMigrations());
+        var script = context.GetService<IMigrator>().GenerateScript(
+            options: MigrationsSqlGenerationOptions.Idempotent);
+
+        Assert.EndsWith("_InitialCreate", migration, StringComparison.Ordinal);
+
+        var expectedTables = new[]
+        {
+            "projects",
+            "review_runs",
+            "findings",
+            "test_cases",
+            "ai_model_runs",
+            "tool_executions"
+        };
+        foreach (var table in expectedTables)
+        {
+            Assert.Contains($"CREATE TABLE {table}", script, StringComparison.Ordinal);
+        }
+
+        Assert.Contains("ux_projects_normalized_root_path", script, StringComparison.Ordinal);
+        Assert.Equal(5, script.Split("ON DELETE CASCADE", StringSplitOptions.None).Length - 1);
+        Assert.Contains("character varying(32)", script, StringComparison.Ordinal);
+        Assert.Contains("character varying(64)", script, StringComparison.Ordinal);
     }
 
     private static CodeGuardDbContext CreateContext()
