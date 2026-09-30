@@ -4,6 +4,7 @@ using CodeGuardAI.Application.Repositories;
 using CodeGuardAI.Application.Context;
 using CodeGuardAI.Application.LLM;
 using CodeGuardAI.Application.Tools;
+using CodeGuardAI.Application.Workflows;
 using CodeGuardAI.Infrastructure.LLM;
 using CodeGuardAI.Infrastructure.Persistence;
 using CodeGuardAI.Infrastructure.Persistence.Queries;
@@ -36,6 +37,7 @@ public static class DependencyInjection
         });
         services.AddScoped<IProjectWriter, EfProjectWriter>();
         services.AddScoped<IProjectQueries, EfProjectQueries>();
+        services.AddScoped<IReviewWorkflowStore, EfReviewWorkflowStore>();
         services.AddSingleton<SafePathResolver>();
         services.AddScoped<IRepositoryScanner, RepositoryScanner>();
         services.AddSingleton(new RepositoryContextOptions());

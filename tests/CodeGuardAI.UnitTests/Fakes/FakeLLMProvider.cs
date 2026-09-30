@@ -7,6 +7,8 @@ public sealed class FakeLLMProvider : ILLMProvider
     private readonly Queue<Func<LLMRequest, CancellationToken, Task<LLMProviderResult>>> _steps = [];
     private readonly List<LLMInvocation> _invocations = [];
 
+    public string Name => "fake";
+
     public IReadOnlyList<LLMInvocation> Invocations => _invocations;
 
     public void EnqueueResult(LLMProviderResult result)

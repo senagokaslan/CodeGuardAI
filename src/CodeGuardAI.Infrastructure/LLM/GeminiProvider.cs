@@ -14,6 +14,8 @@ public sealed class GeminiProvider(
     private const int MaxResponseBytes = 1024 * 1024;
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
+    public string Name => "gemini";
+
     public async Task<LLMProviderResult> GenerateReviewAsync(
         LLMRequest request,
         CancellationToken cancellationToken)

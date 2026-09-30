@@ -13,6 +13,8 @@ namespace CodeGuardAI.Application.Agents;
 
 public interface IReviewAgent
 {
+    string ProviderName { get; }
+
     Task<Result<ReviewAgentResult>> RunAsync(
         ReviewAgentInput input,
         CancellationToken cancellationToken);
@@ -90,6 +92,10 @@ public sealed record ReviewAgentResult(
     Guid ReviewRunId,
     string Model,
     string PromptVersion,
+    string Provider,
+    TimeSpan Duration,
+    int InputCharacters,
+    int OutputCharacters,
     IReadOnlyList<Finding> Findings,
     IReadOnlyList<RejectedFinding> RejectedFindings,
     int DiscardedDuplicateCount);
@@ -99,6 +105,8 @@ public sealed class ReviewAgent(
     FindingGroundingValidator groundingValidator,
     TimeProvider timeProvider) : IReviewAgent
 {
+    public string ProviderName => provider.Name;
+
     public async Task<Result<ReviewAgentResult>> RunAsync(
         ReviewAgentInput input,
         CancellationToken cancellationToken)
@@ -183,6 +191,10 @@ public sealed class ReviewAgent(
             input.ReviewRunId,
             request.Model,
             request.PromptVersion,
+            providerResult.Response.Provider,
+            providerResult.Response.Duration,
+            request.SystemPrompt.Length + request.UserPrompt.Length,
+            providerResult.Response.Content.Length,
             findings,
             rejected,
             groups.Sum(group => group.Count() - 1)));

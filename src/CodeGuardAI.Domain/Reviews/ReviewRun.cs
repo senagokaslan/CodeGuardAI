@@ -18,7 +18,7 @@ public sealed class ReviewRun
         ModelName = modelName;
         PromptVersion = promptVersion;
         StartedAtUtc = startedAtUtc;
-        Status = ReviewStatus.Running;
+        Status = ReviewStatus.Pending;
     }
 
     public Guid Id { get; }
@@ -39,7 +39,7 @@ public sealed class ReviewRun
 
     public string? ScanSummaryJson { get; private set; }
 
-    public static ReviewRun Start(
+    public static ReviewRun Create(
         Guid id,
         Guid projectId,
         string modelName,
@@ -52,6 +52,29 @@ public sealed class ReviewRun
             DomainGuard.Required(modelName, nameof(modelName)),
             DomainGuard.Required(promptVersion, nameof(promptVersion)),
             DomainGuard.Utc(startedAtUtc, nameof(startedAtUtc)));
+    }
+
+    public static ReviewRun Start(
+        Guid id,
+        Guid projectId,
+        string modelName,
+        string promptVersion,
+        DateTimeOffset startedAtUtc)
+    {
+        var review = Create(id, projectId, modelName, promptVersion, startedAtUtc);
+        review.TryStart();
+        return review;
+    }
+
+    public bool TryStart()
+    {
+        if (Status != ReviewStatus.Pending)
+        {
+            return false;
+        }
+
+        Status = ReviewStatus.Running;
+        return true;
     }
 
     public bool TryComplete(DateTimeOffset completedAtUtc, string? scanSummaryJson = null)
@@ -70,7 +93,7 @@ public sealed class ReviewRun
 
     public bool TryFail(string errorCode, DateTimeOffset completedAtUtc)
     {
-        if (Status != ReviewStatus.Running)
+        if (Status is not (ReviewStatus.Pending or ReviewStatus.Running))
         {
             return false;
         }

@@ -3,6 +3,7 @@ using CodeGuardAI.Application.Options;
 using CodeGuardAI.Application.Projects;
 using CodeGuardAI.Application.Repositories;
 using CodeGuardAI.Application.Reviews;
+using CodeGuardAI.Application.Workflows;
 using CodeGuardAI.Infrastructure;
 using CodeGuardAI.Infrastructure.LLM;
 
@@ -48,6 +49,7 @@ internal static class DependencyInjection
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<FindingGroundingValidator>();
         services.AddScoped<IReviewAgent, ReviewAgent>();
+        services.AddScoped<IReviewOrchestrator, ReviewOrchestrator>();
         services.AddScoped<IProjectService, ProjectService>();
         return services;
     }
