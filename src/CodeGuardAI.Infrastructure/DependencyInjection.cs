@@ -31,6 +31,7 @@ public static class DependencyInjection
         });
         services.AddScoped<IProjectWriter, EfProjectWriter>();
         services.AddScoped<IProjectQueries, EfProjectQueries>();
+        services.AddSingleton<SafePathResolver>();
         services.AddScoped<IRepositoryScanner, RepositoryScanner>();
 
         return services;

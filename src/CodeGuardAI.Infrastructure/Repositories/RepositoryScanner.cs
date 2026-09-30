@@ -5,9 +5,21 @@ using Microsoft.Extensions.Options;
 
 namespace CodeGuardAI.Infrastructure.Repositories;
 
-public sealed class RepositoryScanner(IOptions<ScanOptions> options) : IRepositoryScanner
+public sealed class RepositoryScanner : IRepositoryScanner
 {
-    private readonly ScanOptions _options = options.Value;
+    private readonly ScanOptions _options;
+    private readonly SafePathResolver _safePathResolver;
+
+    public RepositoryScanner(IOptions<ScanOptions> options)
+        : this(options, new SafePathResolver())
+    {
+    }
+
+    public RepositoryScanner(IOptions<ScanOptions> options, SafePathResolver safePathResolver)
+    {
+        _options = options.Value;
+        _safePathResolver = safePathResolver;
+    }
 
     public Task<Result<ScanManifest>> ScanAsync(
         string repositoryRoot,
@@ -18,14 +30,17 @@ public sealed class RepositoryScanner(IOptions<ScanOptions> options) : IReposito
             return Task.FromResult(Result.Failure<ScanManifest>(RepositoryScanErrors.InvalidPolicy));
         }
 
-        if (!TryResolveRoot(repositoryRoot, out var resolvedRoot))
+        var rootResolution = _safePathResolver.ResolveRoot(repositoryRoot);
+        if (!rootResolution.IsSuccess)
         {
             return Task.FromResult(Result.Failure<ScanManifest>(RepositoryScanErrors.InvalidRoot));
         }
 
+        var resolvedRoot = rootResolution.FullPath!;
+
         cancellationToken.ThrowIfCancellationRequested();
         var candidates = new List<ScanCandidate>();
-        if (!CollectCandidates(resolvedRoot, candidates, cancellationToken))
+        if (!CollectCandidates(resolvedRoot, candidates, _safePathResolver, cancellationToken))
         {
             return Task.FromResult(Result.Failure<ScanManifest>(RepositoryScanErrors.InvalidRoot));
         }
@@ -45,6 +60,7 @@ public sealed class RepositoryScanner(IOptions<ScanOptions> options) : IReposito
     private static bool CollectCandidates(
         string repositoryRoot,
         ICollection<ScanCandidate> candidates,
+        SafePathResolver safePathResolver,
         CancellationToken cancellationToken)
     {
         var directories = new Stack<string>();
@@ -79,7 +95,7 @@ public sealed class RepositoryScanner(IOptions<ScanOptions> options) : IReposito
             foreach (var path in paths)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                CollectPath(repositoryRoot, path, directories, candidates);
+                CollectPath(repositoryRoot, path, directories, candidates, safePathResolver);
             }
         }
 
@@ -90,9 +106,11 @@ public sealed class RepositoryScanner(IOptions<ScanOptions> options) : IReposito
         string repositoryRoot,
         string path,
         Stack<string> directories,
-        ICollection<ScanCandidate> candidates)
+        ICollection<ScanCandidate> candidates,
+        SafePathResolver safePathResolver)
     {
         var relativePath = ToRelativePath(repositoryRoot, path);
+        var resolution = safePathResolver.ResolvePath(repositoryRoot, path);
         FileAttributes attributes;
 
         try
@@ -112,14 +130,16 @@ public sealed class RepositoryScanner(IOptions<ScanOptions> options) : IReposito
 
         var isDirectory = attributes.HasFlag(FileAttributes.Directory);
         var kind = isDirectory ? ScanEntryKind.Directory : ScanEntryKind.File;
-        if (attributes.HasFlag(FileAttributes.ReparsePoint))
+        if (!resolution.IsSuccess)
         {
             candidates.Add(new ScanCandidate(
                 relativePath,
                 0,
                 RepositoryLanguage.Unknown,
                 kind,
-                ScanSkipReason.ReparsePoint));
+                resolution.Failure == SafePathFailure.ReparsePoint
+                    ? ScanSkipReason.ReparsePoint
+                    : ScanSkipReason.Inaccessible));
             return;
         }
 
@@ -168,7 +188,7 @@ public sealed class RepositoryScanner(IOptions<ScanOptions> options) : IReposito
             return;
         }
 
-        var skipReason = RepositoryScanPolicy.IsSensitiveFile(fileName)
+        var skipReason = SecretPathPolicy.IsDenied(fileName)
             ? ScanSkipReason.SensitivePath
             : GetPolicySkipReason(fileName, extension);
         candidates.Add(new ScanCandidate(
@@ -247,30 +267,6 @@ public sealed class RepositoryScanner(IOptions<ScanOptions> options) : IReposito
             ".json" => RepositoryLanguage.Json,
             _ => RepositoryLanguage.Unknown
         };
-    }
-
-    private static bool TryResolveRoot(string repositoryRoot, out string resolvedRoot)
-    {
-        resolvedRoot = string.Empty;
-        if (string.IsNullOrWhiteSpace(repositoryRoot))
-        {
-            return false;
-        }
-
-        try
-        {
-            resolvedRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(repositoryRoot.Trim()));
-            if (!Directory.Exists(resolvedRoot))
-            {
-                return false;
-            }
-
-            return !File.GetAttributes(resolvedRoot).HasFlag(FileAttributes.ReparsePoint);
-        }
-        catch (Exception exception) when (IsAccessException(exception))
-        {
-            return false;
-        }
     }
 
     private static bool HasValidLimits(ScanOptions options)
