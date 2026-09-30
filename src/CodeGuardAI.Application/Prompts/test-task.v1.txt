@@ -1,0 +1,3 @@
+Generate focused test suggestions for the bounded input below. Keep each suggestion tied to one exact target path.
+
+{{TEST_INPUT}}

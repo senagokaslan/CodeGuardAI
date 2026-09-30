@@ -164,6 +164,11 @@ public sealed class ReviewFlowTests : IDisposable
             CallCount++;
             return Task.FromResult(_results.Dequeue());
         }
+
+        public Task<LLMProviderResult> GenerateTestsAsync(
+            LLMRequest request,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException("This fake only supports review generation.");
     }
 
     private sealed class InMemoryReviewWorkflowStore(Project project) : IReviewWorkflowStore

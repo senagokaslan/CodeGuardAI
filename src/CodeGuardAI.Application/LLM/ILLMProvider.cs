@@ -7,4 +7,8 @@ public interface ILLMProvider
     Task<LLMProviderResult> GenerateReviewAsync(
         LLMRequest request,
         CancellationToken cancellationToken);
+
+    Task<LLMProviderResult> GenerateTestsAsync(
+        LLMRequest request,
+        CancellationToken cancellationToken);
 }

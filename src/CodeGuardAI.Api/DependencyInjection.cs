@@ -49,6 +49,7 @@ internal static class DependencyInjection
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<FindingGroundingValidator>();
         services.AddScoped<IReviewAgent, ReviewAgent>();
+        services.AddScoped<ITestAgent, TestAgent>();
         services.AddScoped<IReviewOrchestrator, ReviewOrchestrator>();
         services.AddScoped<IProjectService, ProjectService>();
         return services;

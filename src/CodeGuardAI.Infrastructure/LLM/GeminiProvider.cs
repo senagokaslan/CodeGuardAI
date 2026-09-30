@@ -20,6 +20,30 @@ public sealed class GeminiProvider(
         LLMRequest request,
         CancellationToken cancellationToken)
     {
+        return await GenerateAsync(
+            request,
+            GeminiReviewSchema.Definition,
+            content => GeminiReviewSchema.Parse(content).IsSuccess,
+            cancellationToken);
+    }
+
+    public async Task<LLMProviderResult> GenerateTestsAsync(
+        LLMRequest request,
+        CancellationToken cancellationToken)
+    {
+        return await GenerateAsync(
+            request,
+            GeminiTestGenerationSchema.Definition,
+            content => GeminiTestGenerationSchema.Parse(content).IsSuccess,
+            cancellationToken);
+    }
+
+    private async Task<LLMProviderResult> GenerateAsync(
+        LLMRequest request,
+        string responseSchema,
+        Func<string, bool> validateStructuredContent,
+        CancellationToken cancellationToken)
+    {
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -28,7 +52,7 @@ public sealed class GeminiProvider(
 
         try
         {
-            var requestJson = CreateRequestJson(request);
+            var requestJson = CreateRequestJson(request, responseSchema);
             using var response = await httpClient.GenerateContentAsync(
                 request.Model,
                 requestJson,
@@ -42,7 +66,7 @@ public sealed class GeminiProvider(
 
             var content = await ReadBoundedContentAsync(response.Content, timeout.Token);
             var structuredContent = ExtractStructuredContent(content);
-            if (structuredContent is null || GeminiReviewSchema.Parse(structuredContent).IsFailure)
+            if (structuredContent is null || !validateStructuredContent(structuredContent))
             {
                 LogFailure(LLMProviderErrorType.InvalidResponse, response.StatusCode);
                 return InvalidResponse();
@@ -78,9 +102,9 @@ public sealed class GeminiProvider(
         }
     }
 
-    private static string CreateRequestJson(LLMRequest request)
+    private static string CreateRequestJson(LLMRequest request, string responseSchema)
     {
-        using var schema = JsonDocument.Parse(GeminiReviewSchema.Definition);
+        using var schema = JsonDocument.Parse(responseSchema);
         var payload = new
         {
             systemInstruction = new
