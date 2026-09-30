@@ -1,6 +1,8 @@
+using CodeGuardAI.Application.Agents;
 using CodeGuardAI.Application.Options;
 using CodeGuardAI.Application.Projects;
 using CodeGuardAI.Application.Repositories;
+using CodeGuardAI.Application.Reviews;
 using CodeGuardAI.Infrastructure;
 using CodeGuardAI.Infrastructure.LLM;
 
@@ -44,6 +46,8 @@ internal static class DependencyInjection
 
         services.AddCodeGuardPersistence();
         services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<FindingGroundingValidator>();
+        services.AddScoped<IReviewAgent, ReviewAgent>();
         services.AddScoped<IProjectService, ProjectService>();
         return services;
     }

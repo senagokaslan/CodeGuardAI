@@ -56,7 +56,7 @@ public sealed record LLMFinding
 
         Severity = severity;
         Category = category;
-        FilePath = normalizedPath.Replace(Path.DirectorySeparatorChar, '/');
+        FilePath = normalizedPath;
         StartLine = startLine;
         EndLine = endLine;
         Title = title.Trim();
