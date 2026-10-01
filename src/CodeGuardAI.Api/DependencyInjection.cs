@@ -57,6 +57,7 @@ internal static class DependencyInjection
         services.AddScoped<IReviewAgent, ReviewAgent>();
         services.AddScoped<ITestAgent, TestAgent>();
         services.AddScoped<IReviewOrchestrator, ReviewOrchestrator>();
+        services.AddScoped<ITestOrchestrator, TestOrchestrator>();
         services.AddScoped<IProjectService, ProjectService>();
         return services;
     }

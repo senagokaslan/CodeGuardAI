@@ -8,7 +8,9 @@ namespace CodeGuardAI.Api.Controllers;
 
 [ApiController]
 [Route("reviews")]
-public sealed class ReviewsController(IReviewOrchestrator orchestrator) : ControllerBase
+public sealed class ReviewsController(
+    IReviewOrchestrator orchestrator,
+    ITestOrchestrator testOrchestrator) : ControllerBase
 {
     [HttpPost]
     [ProducesResponseType<ReviewResponse>(StatusCodes.Status201Created)]
@@ -58,6 +60,75 @@ public sealed class ReviewsController(IReviewOrchestrator orchestrator) : Contro
         return result.IsSuccess
             ? Ok(new ReviewHistoryResponse(result.Value.Select(ToResponse).ToArray()))
             : ResultErrorMapper.ToActionResult(result.Error, HttpContext);
+    }
+
+    [HttpPost("/api/reviews/{id:guid}/tests")]
+    [ProducesResponseType<TestSuggestionBatchResponse>(StatusCodes.Status201Created)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<TestSuggestionBatchResponse>> CreateTests(
+        Guid id,
+        CreateTestSuggestionsRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await testOrchestrator.CreateSuggestionsAsync(
+            new CreateTestSuggestionsCommand(
+                id,
+                request.FindingIds,
+                new TestAgentPolicy(
+                    request.Model!,
+                    TimeSpan.FromSeconds(request.TimeoutSeconds),
+                    request.MaxSuggestions)),
+            cancellationToken);
+        if (result.IsFailure)
+        {
+            return ResultErrorMapper.ToActionResult(result.Error, HttpContext);
+        }
+
+        var response = new TestSuggestionBatchResponse(
+            result.Value.ReviewId,
+            result.Value.ModelRunId,
+            result.Value.Tests.Select(test => new TestSuggestionResponse(
+                test.Id,
+                test.Type.ToString(),
+                test.Name,
+                test.Target,
+                test.Scenario,
+                test.Reason,
+                test.SuggestedTestCode)).ToArray());
+        return Created($"/api/reviews/{id}/tests", response);
+    }
+
+    [HttpPost("/api/reviews/{id:guid}/test-runs")]
+    [ProducesResponseType<TestRunResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<TestRunResponse>> RunTests(
+        Guid id,
+        RunTestsRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await testOrchestrator.RunAsync(
+            new RunTestsCommand(
+                id,
+                request.ProjectPath!,
+                TimeSpan.FromSeconds(request.TimeoutSeconds)),
+            cancellationToken);
+        if (result.IsFailure)
+        {
+            return ResultErrorMapper.ToActionResult(result.Error, HttpContext);
+        }
+
+        return Ok(new TestRunResponse(
+            result.Value.ReviewId,
+            result.Value.ExitCode,
+            result.Value.PassedCount,
+            result.Value.FailedCount,
+            result.Value.SkippedCount,
+            result.Value.Truncated,
+            result.Value.Output));
     }
 
     private static ReviewResponse ToResponse(ReviewReadModel review)

@@ -90,6 +90,8 @@ public sealed record TestAgentResult(
     string PromptVersion,
     string Provider,
     TimeSpan Duration,
+    int InputCharacters,
+    int OutputCharacters,
     IReadOnlyList<TestCase> TestCases,
     IReadOnlyList<RejectedTestSuggestion> RejectedSuggestions,
     int DiscardedDuplicateCount);
@@ -194,6 +196,8 @@ public sealed class TestAgent(
             request.PromptVersion,
             providerResult.Response.Provider,
             providerResult.Response.Duration,
+            request.SystemPrompt.Length + request.UserPrompt.Length,
+            providerResult.Response.Content.Length,
             testCases,
             rejected,
             groups.Sum(group => group.Count() - 1)));
