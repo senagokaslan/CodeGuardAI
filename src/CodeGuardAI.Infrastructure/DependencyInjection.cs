@@ -46,6 +46,7 @@ public static class DependencyInjection
         services.AddSingleton<SafePathResolver>();
         services.AddScoped<IRepositoryScanner, RepositoryScanner>();
         services.AddScoped<IRepositoryScanTool, RepositoryScanTool>();
+        services.AddScoped<ITestRunnerTool, SafeDotnetTestRunner>();
         services.AddSingleton(new RepositoryContextOptions());
         services.AddScoped<IFileReadTool, SafeFileReadTool>();
         services.AddScoped<IRepositoryContextBuilder, RepositoryContextBuilder>();

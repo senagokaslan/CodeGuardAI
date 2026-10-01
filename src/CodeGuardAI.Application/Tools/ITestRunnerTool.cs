@@ -12,6 +12,12 @@ public enum TestRunnerKind
 
 public sealed record TestRunnerToolInput
 {
+    private static readonly char[] ForbiddenPathCharacters =
+        [
+            '&', '|', ';', '<', '>', '^', '%', '$', '`', '!', '"', '\'', '(', ')',
+            '*', '?', '[', ']', '{', '}', ':', '\r', '\n'
+        ];
+
     public TestRunnerToolInput(
         string repositoryRoot,
         string relativeProjectPath,
@@ -27,6 +33,7 @@ public sealed record TestRunnerToolInput
 
         if (Path.IsPathFullyQualified(relativeProjectPath) ||
             !Path.GetExtension(relativeProjectPath).Equals(".csproj", StringComparison.OrdinalIgnoreCase) ||
+            relativeProjectPath.IndexOfAny(ForbiddenPathCharacters) >= 0 ||
             relativeProjectPath.Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries)
                 .Any(segment => segment is "." or ".."))
         {
@@ -55,3 +62,9 @@ public sealed record TestRunnerOutput(
     int FailedCount,
     int SkippedCount,
     string Output);
+
+public static class TestRunnerErrorCodes
+{
+    public const string InvalidTarget = "test_runner.target_invalid";
+    public const string StartFailed = "test_runner.start_failed";
+}

@@ -6,6 +6,7 @@ using CodeGuardAI.Application.Reviews;
 using CodeGuardAI.Application.Workflows;
 using CodeGuardAI.Infrastructure;
 using CodeGuardAI.Infrastructure.LLM;
+using CodeGuardAI.Infrastructure.Tools;
 
 namespace CodeGuardAI.Api;
 
@@ -43,6 +44,11 @@ internal static class DependencyInjection
                            options.MaxFileBytes > 0 &&
                            options.MaxTotalBytes > 0,
                 "Scan limits must be positive.")
+            .ValidateOnStart();
+        services
+            .AddOptions<TestRunnerOptions>()
+            .Bind(configuration.GetSection(TestRunnerOptions.SectionName))
+            .Validate(TestRunnerOptions.IsValid, "Test runner configuration is invalid.")
             .ValidateOnStart();
 
         services.AddCodeGuardPersistence();
