@@ -1,4 +1,5 @@
 using System.Text;
+using CodeGuardAI.Application.Tools;
 using CodeGuardAI.Infrastructure.Repositories;
 using CodeGuardAI.Infrastructure.Tools;
 using Xunit;
@@ -26,9 +27,8 @@ public sealed class SafeFileReadToolTests : IDisposable
             path,
             [.. Encoding.UTF8.Preamble, .. Encoding.UTF8.GetBytes(content)]);
 
-        var result = await CreateTool().ReadAsync(
-            _fixtureRoot,
-            "source.cs",
+        var result = await CreateTool().ExecuteAsync(
+            new FileReadToolInput(_fixtureRoot, "source.cs"),
             CancellationToken.None);
 
         Assert.True(result.IsSuccess);
@@ -41,13 +41,12 @@ public sealed class SafeFileReadToolTests : IDisposable
     {
         await File.WriteAllBytesAsync(Path.Combine(_fixtureRoot, "source.cs"), [0xC3, 0x28]);
 
-        var result = await CreateTool().ReadAsync(
-            _fixtureRoot,
-            "source.cs",
+        var result = await CreateTool().ExecuteAsync(
+            new FileReadToolInput(_fixtureRoot, "source.cs"),
             CancellationToken.None);
 
         Assert.True(result.IsFailure);
-        Assert.Equal("file_read.invalid_utf8", result.Error.Code);
+        Assert.Equal("file_read.invalid_utf8", result.ErrorCode);
     }
 
     [Fact]
@@ -55,13 +54,12 @@ public sealed class SafeFileReadToolTests : IDisposable
     {
         await File.WriteAllBytesAsync(Path.Combine(_fixtureRoot, "source.cs"), [0x41, 0x00, 0x42]);
 
-        var result = await CreateTool().ReadAsync(
-            _fixtureRoot,
-            "source.cs",
+        var result = await CreateTool().ExecuteAsync(
+            new FileReadToolInput(_fixtureRoot, "source.cs"),
             CancellationToken.None);
 
         Assert.True(result.IsFailure);
-        Assert.Equal("file_read.binary", result.Error.Code);
+        Assert.Equal("file_read.binary", result.ErrorCode);
     }
 
     [Fact]
@@ -72,14 +70,12 @@ public sealed class SafeFileReadToolTests : IDisposable
 
         try
         {
-            var result = await CreateTool().ReadAsync(
-                _fixtureRoot,
-                Path.Combine("..", "outside.cs"),
+            var result = await CreateTool().ExecuteAsync(
+                new FileReadToolInput(_fixtureRoot, Path.Combine("..", "outside.cs")),
                 CancellationToken.None);
 
             Assert.True(result.IsFailure);
-            Assert.Equal("file_read.path_invalid", result.Error.Code);
-            Assert.DoesNotContain("outside.cs", result.Error.Description, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal("file_read.path_invalid", result.ErrorCode);
         }
         finally
         {
@@ -92,13 +88,12 @@ public sealed class SafeFileReadToolTests : IDisposable
     {
         await File.WriteAllTextAsync(Path.Combine(_fixtureRoot, ".env"), "SECRET=value");
 
-        var result = await CreateTool().ReadAsync(
-            _fixtureRoot,
-            ".env",
+        var result = await CreateTool().ExecuteAsync(
+            new FileReadToolInput(_fixtureRoot, ".env"),
             CancellationToken.None);
 
         Assert.True(result.IsFailure);
-        Assert.Equal("file_read.path_invalid", result.Error.Code);
+        Assert.Equal("file_read.path_invalid", result.ErrorCode);
     }
 
     private static SafeFileReadTool CreateTool()

@@ -1,12 +1,13 @@
 using System.Security;
 using System.Text;
-using CodeGuardAI.Application.Common;
 using CodeGuardAI.Application.Tools;
 using CodeGuardAI.Infrastructure.Repositories;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace CodeGuardAI.Infrastructure.Tools;
 
-public sealed class SafeFileReadTool(SafePathResolver safePathResolver) : IFileReadTool
+public sealed class SafeFileReadTool : IFileReadTool
 {
     private const int MaxReadableBytes = 1024 * 1024;
     private static readonly byte[] Utf8Preamble = [0xEF, 0xBB, 0xBF];
@@ -14,29 +15,66 @@ public sealed class SafeFileReadTool(SafePathResolver safePathResolver) : IFileR
         encoderShouldEmitUTF8Identifier: false,
         throwOnInvalidBytes: true);
 
-    public async Task<Result<FileReadContent>> ReadAsync(
-        string repositoryRoot,
-        string relativePath,
+    private readonly SafePathResolver _safePathResolver;
+    private readonly ToolExecutionEnvelope _envelope;
+    private readonly ILogger<SafeFileReadTool> _logger;
+
+    public SafeFileReadTool(
+        SafePathResolver safePathResolver,
+        ToolExecutionEnvelope envelope,
+        ILogger<SafeFileReadTool> logger)
+    {
+        _safePathResolver = safePathResolver;
+        _envelope = envelope;
+        _logger = logger;
+    }
+
+    public SafeFileReadTool(SafePathResolver safePathResolver)
+        : this(
+            safePathResolver,
+            new ToolExecutionEnvelope(
+                new InternalToolAuthorizationPolicy(),
+                new NullToolExecutionWriter(),
+                TimeProvider.System),
+            NullLogger<SafeFileReadTool>.Instance)
+    {
+    }
+
+    public Task<ToolResult<FileReadContent>> ExecuteAsync(
+        FileReadToolInput input,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        return _envelope.ExecuteAsync(
+            ToolNames.FileRead,
+            input.ToRedactedAuditSummary(),
+            input.Execution,
+            _logger,
+            token => ReadCoreAsync(input, token),
+            cancellationToken);
+    }
+
+    private async Task<ToolOperationResult<FileReadContent>> ReadCoreAsync(
+        FileReadToolInput input,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (string.IsNullOrWhiteSpace(relativePath) ||
-            Path.IsPathFullyQualified(relativePath) ||
-            SecretPathPolicy.IsDenied(relativePath))
+        if (Path.IsPathFullyQualified(input.RelativePath) ||
+            SecretPathPolicy.IsDenied(input.RelativePath))
         {
-            return Result.Failure<FileReadContent>(FileReadErrors.InvalidPath);
+            return ToolOperationResult<FileReadContent>.Failure(FileReadErrorCodes.InvalidPath);
         }
 
-        var rootResolution = safePathResolver.ResolveRoot(repositoryRoot);
+        var rootResolution = _safePathResolver.ResolveRoot(input.RepositoryRoot);
         if (!rootResolution.IsSuccess)
         {
-            return Result.Failure<FileReadContent>(MapPathFailure(rootResolution.Failure));
+            return ToolOperationResult<FileReadContent>.Failure(MapPathFailure(rootResolution.Failure));
         }
 
-        var pathResolution = safePathResolver.ResolvePath(rootResolution.FullPath!, relativePath);
+        var pathResolution = _safePathResolver.ResolvePath(rootResolution.FullPath!, input.RelativePath);
         if (!pathResolution.IsSuccess)
         {
-            return Result.Failure<FileReadContent>(MapPathFailure(pathResolution.Failure));
+            return ToolOperationResult<FileReadContent>.Failure(MapPathFailure(pathResolution.Failure));
         }
 
         try
@@ -44,18 +82,18 @@ public sealed class SafeFileReadTool(SafePathResolver safePathResolver) : IFileR
             var file = new FileInfo(pathResolution.FullPath!);
             if (file.Length > MaxReadableBytes)
             {
-                return Result.Failure<FileReadContent>(FileReadErrors.TooLarge);
+                return ToolOperationResult<FileReadContent>.Failure(FileReadErrorCodes.TooLarge);
             }
 
             var bytes = await File.ReadAllBytesAsync(pathResolution.FullPath!, cancellationToken);
             if (bytes.Length > MaxReadableBytes)
             {
-                return Result.Failure<FileReadContent>(FileReadErrors.TooLarge);
+                return ToolOperationResult<FileReadContent>.Failure(FileReadErrorCodes.TooLarge);
             }
 
             if (LooksBinary(bytes))
             {
-                return Result.Failure<FileReadContent>(FileReadErrors.Binary);
+                return ToolOperationResult<FileReadContent>.Failure(FileReadErrorCodes.Binary);
             }
 
             var contentBytes = bytes.AsSpan();
@@ -71,14 +109,16 @@ public sealed class SafeFileReadTool(SafePathResolver safePathResolver) : IFileR
             }
             catch (DecoderFallbackException)
             {
-                return Result.Failure<FileReadContent>(FileReadErrors.InvalidEncoding);
+                return ToolOperationResult<FileReadContent>.Failure(FileReadErrorCodes.InvalidEncoding);
             }
 
             var normalizedRelativePath = Path.GetRelativePath(
                     rootResolution.FullPath!,
                     pathResolution.FullPath!)
                 .Replace(Path.DirectorySeparatorChar, '/');
-            return Result.Success(new FileReadContent(normalizedRelativePath, content));
+            return ToolOperationResult<FileReadContent>.Success(
+                new FileReadContent(normalizedRelativePath, content),
+                $"success=true; bytes={bytes.Length}; truncated=false");
         }
         catch (OperationCanceledException)
         {
@@ -86,7 +126,7 @@ public sealed class SafeFileReadTool(SafePathResolver safePathResolver) : IFileR
         }
         catch (Exception exception) when (IsReadException(exception))
         {
-            return Result.Failure<FileReadContent>(FileReadErrors.Failed);
+            return ToolOperationResult<FileReadContent>.Failure(FileReadErrorCodes.Failed);
         }
     }
 
@@ -116,11 +156,11 @@ public sealed class SafeFileReadTool(SafePathResolver safePathResolver) : IFileR
         return suspiciousBytes * 10 > inspectedLength;
     }
 
-    private static Error MapPathFailure(SafePathFailure failure)
+    private static string MapPathFailure(SafePathFailure failure)
     {
         return failure == SafePathFailure.NotFound
-            ? FileReadErrors.NotFound
-            : FileReadErrors.InvalidPath;
+            ? FileReadErrorCodes.NotFound
+            : FileReadErrorCodes.InvalidPath;
     }
 
     private static bool IsReadException(Exception exception)

@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using CodeGuardAI.Api.Contracts.Reviews;
 using CodeGuardAI.Application.LLM;
+using CodeGuardAI.Application.Tools;
 using CodeGuardAI.Application.Workflows;
 using CodeGuardAI.Domain.Observability;
 using CodeGuardAI.Domain.Projects;
@@ -119,8 +120,10 @@ public sealed class ReviewFlowTests : IDisposable
                 {
                     services.RemoveAll<IReviewWorkflowStore>();
                     services.RemoveAll<ILLMProvider>();
+                    services.RemoveAll<IToolExecutionWriter>();
                     services.AddSingleton<IReviewWorkflowStore>(store);
                     services.AddSingleton<ILLMProvider>(provider);
+                    services.AddSingleton<IToolExecutionWriter, InMemoryToolExecutionWriter>();
                 });
             });
     }
@@ -169,6 +172,17 @@ public sealed class ReviewFlowTests : IDisposable
             LLMRequest request,
             CancellationToken cancellationToken) =>
             throw new NotSupportedException("This fake only supports review generation.");
+    }
+
+    private sealed class InMemoryToolExecutionWriter : IToolExecutionWriter
+    {
+        public Task RecordAsync(
+            ToolExecutionRecord execution,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class InMemoryReviewWorkflowStore(Project project) : IReviewWorkflowStore

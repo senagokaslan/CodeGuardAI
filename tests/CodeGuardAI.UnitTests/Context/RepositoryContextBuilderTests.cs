@@ -180,14 +180,16 @@ public sealed class RepositoryContextBuilderTests
     {
         public List<string> ReadPaths { get; } = [];
 
-        public Task<Result<FileReadContent>> ReadAsync(
-            string repositoryRoot,
-            string relativePath,
+        public Task<ToolResult<FileReadContent>> ExecuteAsync(
+            FileReadToolInput input,
             CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            ReadPaths.Add(relativePath);
-            return Task.FromResult(results[relativePath]);
+            ReadPaths.Add(input.RelativePath);
+            var result = results[input.RelativePath];
+            return Task.FromResult(result.IsSuccess
+                ? ToolResult<FileReadContent>.Success(result.Value, TimeSpan.Zero)
+                : ToolResult<FileReadContent>.Failure(result.Error.Code, TimeSpan.Zero));
         }
     }
 }

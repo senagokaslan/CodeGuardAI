@@ -12,6 +12,7 @@ using CodeGuardAI.Infrastructure.Repositories;
 using CodeGuardAI.Infrastructure.Tools;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
 namespace CodeGuardAI.Infrastructure;
@@ -38,8 +39,13 @@ public static class DependencyInjection
         services.AddScoped<IProjectWriter, EfProjectWriter>();
         services.AddScoped<IProjectQueries, EfProjectQueries>();
         services.AddScoped<IReviewWorkflowStore, EfReviewWorkflowStore>();
+        services.AddScoped<IToolExecutionWriter, EfToolExecutionWriter>();
+        services.AddSingleton<IToolAuthorizationPolicy, InternalToolAuthorizationPolicy>();
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddScoped<ToolExecutionEnvelope>();
         services.AddSingleton<SafePathResolver>();
         services.AddScoped<IRepositoryScanner, RepositoryScanner>();
+        services.AddScoped<IRepositoryScanTool, RepositoryScanTool>();
         services.AddSingleton(new RepositoryContextOptions());
         services.AddScoped<IFileReadTool, SafeFileReadTool>();
         services.AddScoped<IRepositoryContextBuilder, RepositoryContextBuilder>();

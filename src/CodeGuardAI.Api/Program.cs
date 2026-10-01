@@ -19,6 +19,13 @@ app.UseStatusCodePages();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.UseSwaggerUI(options =>
+    {
+        options.SwaggerEndpoint("/openapi/v1.json", "CodeGuard AI API v1");
+        options.DocumentTitle = "CodeGuard AI API";
+    });
+    app.MapGet("/", () => Results.Redirect("/swagger"))
+        .ExcludeFromDescription();
 }
 
 app.MapControllers();

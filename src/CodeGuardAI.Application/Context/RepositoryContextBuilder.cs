@@ -35,15 +35,14 @@ public sealed class RepositoryContextBuilder(
                 break;
             }
 
-            var readResult = await fileReadTool.ReadAsync(
-                repositoryRoot,
-                entry.RelativePath,
+            var readResult = await fileReadTool.ExecuteAsync(
+                new FileReadToolInput(repositoryRoot, entry.RelativePath),
                 cancellationToken);
             if (readResult.IsFailure)
             {
                 failures.Add(new RepositoryContextReadFailure(
                     entry.RelativePath,
-                    readResult.Error.Code));
+                    readResult.ErrorCode!));
                 continue;
             }
 
