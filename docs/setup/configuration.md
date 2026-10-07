@@ -54,6 +54,13 @@ dotnet run --project src/CodeGuardAI.McpHost
 
 `CodeGuardAI.McpHost` stdout'u MCP protokolüne ayırır; uygulama logları stderr'e gider. MCP client process environment aktarımını destekliyorsa yalnız gereken değerleri allowlist etmek, parent process'in ilgisiz secret'larını miras bırakmaktan daha güvenlidir.
 
+`run_tests` için varsayılan timeout ve output cap aynı strongly typed `TestRunnerOptions` üzerinden yönetilir. MCP input'u bu limitleri override edemez. Gerektiğinde host environment'ında bounded değerler verilebilir:
+
+```powershell
+$env:TestRunner__DefaultTimeout = "00:02:00"
+$env:TestRunner__MaxOutputCharacters = "32768"
+```
+
 ## Öncelik
 
 Aynı anahtar birden fazla kaynaktaysa son sağlayıcı kazanır. Bu proje için ilgili düşükten yükseğe sıra:

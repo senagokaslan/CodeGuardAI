@@ -10,10 +10,14 @@ public sealed class TestRunnerOptions
 
     public int MaxOutputCharacters { get; init; } = DefaultMaxOutputCharacters;
 
+    public TimeSpan DefaultTimeout { get; init; } = TimeSpan.FromMinutes(2);
+
     public static bool IsValid(TestRunnerOptions options)
     {
         if (string.IsNullOrWhiteSpace(options.DotNetExecutablePath) ||
-            options.MaxOutputCharacters is <= 0 or > MaximumOutputCharacters)
+            options.MaxOutputCharacters is <= 0 or > MaximumOutputCharacters ||
+            options.DefaultTimeout <= TimeSpan.Zero ||
+            options.DefaultTimeout > TimeSpan.FromMinutes(10))
         {
             return false;
         }

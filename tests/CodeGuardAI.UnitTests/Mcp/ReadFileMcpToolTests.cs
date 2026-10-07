@@ -56,8 +56,7 @@ public sealed class ReadFileMcpToolTests : IDisposable
             cancellationToken: timeout.Token);
 
         var tools = await client.ListToolsAsync(cancellationToken: timeout.Token);
-        var tool = Assert.Single(tools);
-        Assert.Equal(ReadFileMcpTool.ToolName, tool.Name);
+        var tool = Assert.Single(tools, candidate => candidate.Name == ReadFileMcpTool.ToolName);
         var properties = tool.JsonSchema.GetProperty("properties");
         Assert.True(properties.TryGetProperty("repositoryId", out _));
         Assert.True(properties.TryGetProperty("relativePath", out _));
