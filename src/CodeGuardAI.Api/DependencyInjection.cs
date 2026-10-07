@@ -50,9 +50,17 @@ internal static class DependencyInjection
             .Bind(configuration.GetSection(TestRunnerOptions.SectionName))
             .Validate(TestRunnerOptions.IsValid, "Test runner configuration is invalid.")
             .ValidateOnStart();
+        services
+            .AddOptions<WorkflowSafetyOptions>()
+            .Bind(configuration.GetSection(WorkflowSafetyOptions.SectionName))
+            .Validate(WorkflowSafetyOptions.IsValid, "Workflow safety configuration is invalid.")
+            .ValidateOnStart();
 
         services.AddCodeGuardPersistence();
         services.AddSingleton(TimeProvider.System);
+        services.AddSingleton(serviceProvider => serviceProvider
+            .GetRequiredService<Microsoft.Extensions.Options.IOptions<WorkflowSafetyOptions>>()
+            .Value);
         services.AddSingleton<FindingGroundingValidator>();
         services.AddScoped<IReviewAgent, ReviewAgent>();
         services.AddScoped<ITestAgent, TestAgent>();

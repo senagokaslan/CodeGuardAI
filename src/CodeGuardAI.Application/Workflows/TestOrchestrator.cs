@@ -8,6 +8,7 @@ using CodeGuardAI.Application.Tools;
 using CodeGuardAI.Domain.Observability;
 using CodeGuardAI.Domain.Reviews;
 using CodeGuardAI.Domain.Tests;
+using Microsoft.Extensions.Logging;
 
 namespace CodeGuardAI.Application.Workflows;
 
@@ -28,7 +29,7 @@ public interface ITestWorkflowStore
 
     Task<bool> HasCompletedGenerationAsync(Guid reviewId, CancellationToken cancellationToken);
 
-    Task CompleteGenerationAsync(
+    Task<bool> TryCompleteGenerationAsync(
         IReadOnlyCollection<TestCase> testCases,
         AIModelRun modelRun,
         CancellationToken cancellationToken);
@@ -80,13 +81,20 @@ public sealed class TestOrchestrator(
     IRepositoryContextBuilder contextBuilder,
     ITestAgent testAgent,
     ITestRunnerTool testRunner,
-    TimeProvider timeProvider) : ITestOrchestrator
+    TimeProvider timeProvider,
+    ILogger<TestOrchestrator> logger) : ITestOrchestrator
 {
+    public const int MaxGenerationSteps = 7;
+    public const int MaxRunSteps = 3;
+
     public async Task<Result<TestSuggestionBatch>> CreateSuggestionsAsync(
         CreateTestSuggestionsCommand command,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
+        using var scope = BeginScope(command.ReviewId);
+        var steps = new WorkflowStepBudget(MaxGenerationSteps);
+        EnterStep(steps, "LoadSource");
         var source = command.ReviewId == Guid.Empty
             ? null
             : await store.GetSourceAsync(command.ReviewId, cancellationToken);
@@ -100,11 +108,13 @@ public sealed class TestOrchestrator(
             return Result.Failure<TestSuggestionBatch>(TestWorkflowErrors.ReviewNotCompleted);
         }
 
+        EnterStep(steps, "CheckIdempotency");
         if (await store.HasCompletedGenerationAsync(command.ReviewId, cancellationToken))
         {
             return Result.Failure<TestSuggestionBatch>(TestWorkflowErrors.AlreadyGenerated);
         }
 
+        EnterStep(steps, "ValidateSelection");
         var requestedIds = command.FindingIds.ToHashSet();
         var selectedFindings = source.Findings
             .Where(finding => requestedIds.Contains(finding.Id))
@@ -116,12 +126,14 @@ public sealed class TestOrchestrator(
             return Result.Failure<TestSuggestionBatch>(TestWorkflowErrors.InvalidSelection);
         }
 
+        EnterStep(steps, "ScanRepository");
         var scan = await scanner.ScanAsync(source.RepositoryRoot, cancellationToken);
         if (scan.IsFailure)
         {
             return Result.Failure<TestSuggestionBatch>(TestWorkflowErrors.ContextFailed);
         }
 
+        EnterStep(steps, "BuildContext");
         var context = await contextBuilder.BuildAsync(
             source.RepositoryRoot,
             scan.Value,
@@ -131,6 +143,7 @@ public sealed class TestOrchestrator(
             return Result.Failure<TestSuggestionBatch>(TestWorkflowErrors.ContextFailed);
         }
 
+        EnterStep(steps, "RunAgent");
         var stopwatch = Stopwatch.StartNew();
         var agentResult = await testAgent.RunAsync(
             new TestAgentInput(source.ReviewRun, selectedFindings, context.Value, command.Policy),
@@ -142,15 +155,25 @@ public sealed class TestOrchestrator(
                 command.Policy,
                 stopwatch.Elapsed,
                 agentResult.Error.Code);
+            EnterStep(steps, "PersistTerminal");
             await store.SaveFailedModelRunAsync(failedRun, cancellationToken);
             return Result.Failure<TestSuggestionBatch>(TestWorkflowErrors.GenerationFailed);
         }
 
         var modelRun = CreateSuccessfulModelRun(agentResult.Value);
-        await store.CompleteGenerationAsync(
+        EnterStep(steps, "PersistTerminal");
+        var completed = await store.TryCompleteGenerationAsync(
             agentResult.Value.TestCases,
             modelRun,
             cancellationToken);
+        if (!completed)
+        {
+            logger.LogWarning(
+                "Concurrent completed test generation rejected for review {ReviewRunId}.",
+                command.ReviewId);
+            return Result.Failure<TestSuggestionBatch>(TestWorkflowErrors.AlreadyGenerated);
+        }
+
         return Result.Success(new TestSuggestionBatch(
             source.ReviewRun.Id,
             modelRun.Id,
@@ -162,6 +185,9 @@ public sealed class TestOrchestrator(
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
+        using var scope = BeginScope(command.ReviewId);
+        var steps = new WorkflowStepBudget(MaxRunSteps);
+        EnterStep(steps, "LoadSource");
         var source = command.ReviewId == Guid.Empty
             ? null
             : await store.GetSourceAsync(command.ReviewId, cancellationToken);
@@ -175,6 +201,7 @@ public sealed class TestOrchestrator(
             return Result.Failure<TestRunReadModel>(TestWorkflowErrors.ReviewNotCompleted);
         }
 
+        EnterStep(steps, "ValidateTarget");
         TestRunnerToolInput input;
         try
         {
@@ -189,6 +216,7 @@ public sealed class TestOrchestrator(
             return Result.Failure<TestRunReadModel>(TestWorkflowErrors.InvalidTestTarget);
         }
 
+        EnterStep(steps, "RunTool");
         var run = await testRunner.ExecuteAsync(input, cancellationToken);
         if (run.IsFailure)
         {
@@ -251,6 +279,23 @@ public sealed class TestOrchestrator(
 
     private static int ToMilliseconds(TimeSpan duration) =>
         (int)Math.Min(int.MaxValue, Math.Max(0, duration.TotalMilliseconds));
+
+    private IDisposable? BeginScope(Guid reviewRunId) =>
+        logger.BeginScope(new Dictionary<string, object?>
+        {
+            ["CorrelationId"] = reviewRunId,
+            ["ReviewRunId"] = reviewRunId
+        });
+
+    private void EnterStep(WorkflowStepBudget budget, string step)
+    {
+        budget.Enter(step);
+        logger.LogDebug(
+            "Test workflow entered step {Step} ({StepNumber}/{MaxSteps}).",
+            step,
+            budget.StepsUsed,
+            budget.MaxSteps);
+    }
 }
 
 public static class TestWorkflowErrors

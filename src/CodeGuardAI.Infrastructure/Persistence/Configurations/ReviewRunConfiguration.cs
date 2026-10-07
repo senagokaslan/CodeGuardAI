@@ -1,5 +1,6 @@
 using CodeGuardAI.Domain.Projects;
 using CodeGuardAI.Domain.Reviews;
+using CodeGuardAI.Infrastructure.Persistence.Concurrency;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -53,5 +54,9 @@ internal sealed class ReviewRunConfiguration : IEntityTypeConfiguration<ReviewRu
 
         builder.HasIndex(reviewRun => reviewRun.ProjectId)
             .HasDatabaseName("ix_review_runs_project_id");
+        builder.HasIndex(reviewRun => reviewRun.ProjectId, "ActiveReviewPerProject")
+            .IsUnique()
+            .HasFilter("status IN ('Pending', 'Running')")
+            .HasDatabaseName(WorkflowConcurrencyIndexes.ActiveReviewPerProject);
     }
 }

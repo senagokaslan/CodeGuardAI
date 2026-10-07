@@ -5,6 +5,7 @@ namespace CodeGuardAI.Domain.Reviews;
 public sealed class ReviewRun
 {
     public const string CancelledErrorCode = "Cancelled";
+    public const string RecoveryTimeoutErrorCode = "RecoveryTimeout";
 
     private ReviewRun(
         Guid id,

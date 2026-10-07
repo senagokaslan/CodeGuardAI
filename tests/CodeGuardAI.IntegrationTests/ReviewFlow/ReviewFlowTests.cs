@@ -200,11 +200,14 @@ public sealed class ReviewFlowTests : IDisposable
         public Task<Project?> GetProjectAsync(Guid projectId, CancellationToken cancellationToken) =>
             Task.FromResult<Project?>(projectId == project.Id ? project : null);
 
-        public Task CreatePendingAsync(ReviewRun reviewRun, CancellationToken cancellationToken)
+        public Task<bool> TryCreatePendingAsync(
+            ReviewRun reviewRun,
+            DateTimeOffset staleBeforeUtc,
+            CancellationToken cancellationToken)
         {
             ReviewRun = reviewRun;
             Transitions.Add(reviewRun.Status);
-            return Task.CompletedTask;
+            return Task.FromResult(true);
         }
 
         public Task SaveStateAsync(ReviewRun reviewRun, CancellationToken cancellationToken)

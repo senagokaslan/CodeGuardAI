@@ -1,5 +1,6 @@
 using CodeGuardAI.Domain.Observability;
 using CodeGuardAI.Domain.Reviews;
+using CodeGuardAI.Infrastructure.Persistence.Concurrency;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -68,5 +69,9 @@ internal sealed class AIModelRunConfiguration : IEntityTypeConfiguration<AIModel
 
         builder.HasIndex(modelRun => modelRun.ReviewRunId)
             .HasDatabaseName("ix_ai_model_runs_review_run_id");
+        builder.HasIndex(modelRun => new { modelRun.ReviewRunId, modelRun.Purpose })
+            .IsUnique()
+            .HasFilter("purpose = 'TestGeneration' AND status = 'Succeeded'")
+            .HasDatabaseName(WorkflowConcurrencyIndexes.SuccessfulTestGeneration);
     }
 }

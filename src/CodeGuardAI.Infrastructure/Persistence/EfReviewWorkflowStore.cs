@@ -2,6 +2,7 @@ using CodeGuardAI.Application.Workflows;
 using CodeGuardAI.Domain.Observability;
 using CodeGuardAI.Domain.Projects;
 using CodeGuardAI.Domain.Reviews;
+using CodeGuardAI.Infrastructure.Persistence.Concurrency;
 using Microsoft.EntityFrameworkCore;
 
 namespace CodeGuardAI.Infrastructure.Persistence;
@@ -15,12 +16,40 @@ internal sealed class EfReviewWorkflowStore(CodeGuardDbContext dbContext) : IRev
             cancellationToken);
     }
 
-    public async Task CreatePendingAsync(
+    public async Task<bool> TryCreatePendingAsync(
         ReviewRun reviewRun,
+        DateTimeOffset staleBeforeUtc,
         CancellationToken cancellationToken)
     {
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await dbContext.ReviewRuns
+            .Where(candidate =>
+                candidate.ProjectId == reviewRun.ProjectId &&
+                candidate.StartedAtUtc < staleBeforeUtc &&
+                (candidate.Status == ReviewStatus.Pending || candidate.Status == ReviewStatus.Running))
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(candidate => candidate.Status, ReviewStatus.Failed)
+                    .SetProperty(candidate => candidate.ErrorCode, ReviewRun.RecoveryTimeoutErrorCode)
+                    .SetProperty(candidate => candidate.CompletedAtUtc, reviewRun.StartedAtUtc),
+                cancellationToken);
+
         dbContext.ReviewRuns.Add(reviewRun);
-        await dbContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return true;
+        }
+        catch (DbUpdateException exception) when (
+            WorkflowConcurrencyErrors.IsUniqueViolation(
+                exception,
+                WorkflowConcurrencyIndexes.ActiveReviewPerProject))
+        {
+            await transaction.RollbackAsync(CancellationToken.None);
+            dbContext.Entry(reviewRun).State = EntityState.Detached;
+            return false;
+        }
     }
 
     public Task SaveStateAsync(ReviewRun reviewRun, CancellationToken cancellationToken)

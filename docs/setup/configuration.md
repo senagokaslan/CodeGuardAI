@@ -61,6 +61,14 @@ $env:TestRunner__DefaultTimeout = "00:02:00"
 $env:TestRunner__MaxOutputCharacters = "32768"
 ```
 
+Yarım kalan review recovery eşiği `WorkflowSafety:StaleReviewTimeout` ile yönetilir. Varsayılan 15 dakikadır; kabul edilen aralık 1 dakika ile 24 saattir:
+
+```powershell
+$env:WorkflowSafety__StaleReviewTimeout = "00:15:00"
+```
+
+Recovery ve duplicate conflict davranışının ayrıntıları için [workflow safety](../workflow-safety.md) belgesine bak.
+
 ## Öncelik
 
 Aynı anahtar birden fazla kaynaktaysa son sağlayıcı kazanır. Bu proje için ilgili düşükten yükseğe sıra:

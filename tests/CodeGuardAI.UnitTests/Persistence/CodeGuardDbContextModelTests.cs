@@ -117,14 +117,16 @@ public sealed class CodeGuardDbContextModelTests
     }
 
     [Fact]
-    public void Initial_migration_script_contains_expected_schema_contract()
+    public void Migration_script_contains_schema_and_workflow_concurrency_contracts()
     {
         using var context = CreateContext();
-        var migration = Assert.Single(context.Database.GetMigrations());
+        var migrations = context.Database.GetMigrations().ToArray();
         var script = context.GetService<IMigrator>().GenerateScript(
             options: MigrationsSqlGenerationOptions.Idempotent);
 
-        Assert.EndsWith("_InitialCreate", migration, StringComparison.Ordinal);
+        Assert.Equal(2, migrations.Length);
+        Assert.EndsWith("_InitialCreate", migrations[0], StringComparison.Ordinal);
+        Assert.EndsWith("_WorkflowSafetyConcurrency", migrations[1], StringComparison.Ordinal);
 
         var expectedTables = new[]
         {
@@ -141,6 +143,8 @@ public sealed class CodeGuardDbContextModelTests
         }
 
         Assert.Contains("ux_projects_normalized_root_path", script, StringComparison.Ordinal);
+        Assert.Contains("ux_review_runs_active_project", script, StringComparison.Ordinal);
+        Assert.Contains("ux_ai_model_runs_successful_test_generation", script, StringComparison.Ordinal);
         Assert.Equal(5, script.Split("ON DELETE CASCADE", StringSplitOptions.None).Length - 1);
         Assert.Contains("character varying(32)", script, StringComparison.Ordinal);
         Assert.Contains("character varying(64)", script, StringComparison.Ordinal);

@@ -235,7 +235,7 @@ public sealed class TestFlowTests : IDisposable
             CancellationToken cancellationToken) =>
             Task.FromResult(ModelRun?.Status == AIModelRunStatus.Succeeded);
 
-        public Task CompleteGenerationAsync(
+        public Task<bool> TryCompleteGenerationAsync(
             IReadOnlyCollection<TestCase> testCases,
             AIModelRun modelRun,
             CancellationToken cancellationToken)
@@ -243,7 +243,7 @@ public sealed class TestFlowTests : IDisposable
             cancellationToken.ThrowIfCancellationRequested();
             TestCases.AddRange(testCases);
             ModelRun = modelRun;
-            return Task.CompletedTask;
+            return Task.FromResult(true);
         }
 
         public Task SaveFailedModelRunAsync(

@@ -8,6 +8,7 @@ using CodeGuardAI.Application.Repositories;
 using CodeGuardAI.Domain.Observability;
 using CodeGuardAI.Domain.Projects;
 using CodeGuardAI.Domain.Reviews;
+using Microsoft.Extensions.Logging;
 
 namespace CodeGuardAI.Application.Workflows;
 
@@ -28,7 +29,10 @@ public interface IReviewWorkflowStore
 {
     Task<Project?> GetProjectAsync(Guid projectId, CancellationToken cancellationToken);
 
-    Task CreatePendingAsync(ReviewRun reviewRun, CancellationToken cancellationToken);
+    Task<bool> TryCreatePendingAsync(
+        ReviewRun reviewRun,
+        DateTimeOffset staleBeforeUtc,
+        CancellationToken cancellationToken);
 
     Task SaveStateAsync(ReviewRun reviewRun, CancellationToken cancellationToken);
 
@@ -82,7 +86,9 @@ public sealed class ReviewOrchestrator(
     IRepositoryScanner scanner,
     IRepositoryContextBuilder contextBuilder,
     IReviewAgent reviewAgent,
-    TimeProvider timeProvider) : IReviewOrchestrator
+    TimeProvider timeProvider,
+    WorkflowSafetyOptions safetyOptions,
+    ILogger<ReviewOrchestrator> logger) : IReviewOrchestrator
 {
     public async Task<Result<ReviewReadModel>> CreateAsync(
         CreateReviewCommand command,
@@ -100,24 +106,44 @@ public sealed class ReviewOrchestrator(
             return Result.Failure<ReviewReadModel>(ReviewWorkflowErrors.ProjectNotFound);
         }
 
+        var startedAtUtc = timeProvider.GetUtcNow();
         var reviewRun = ReviewRun.Create(
             Guid.NewGuid(),
             project.Id,
             command.Policy.Model,
             ReviewPromptRegistry.CurrentVersion,
-            timeProvider.GetUtcNow());
-        await store.CreatePendingAsync(reviewRun, cancellationToken);
+            startedAtUtc);
+        using var scope = logger.BeginScope(new Dictionary<string, object?>
+        {
+            ["CorrelationId"] = reviewRun.Id,
+            ["ReviewRunId"] = reviewRun.Id,
+            ["ProjectId"] = project.Id
+        });
+        var stateMachine = new ReviewWorkflowStateMachine();
+        var created = await store.TryCreatePendingAsync(
+            reviewRun,
+            startedAtUtc - safetyOptions.StaleReviewTimeout,
+            cancellationToken);
+        if (!created)
+        {
+            logger.LogWarning("Concurrent active review rejected for project {ProjectId}.", project.Id);
+            return Result.Failure<ReviewReadModel>(ReviewWorkflowErrors.DuplicateActiveReview);
+        }
+
+        stateMachine.MoveTo(ReviewWorkflowStage.PendingPersisted);
 
         try
         {
             reviewRun.TryStart();
             await store.SaveStateAsync(reviewRun, cancellationToken);
+            stateMachine.MoveTo(ReviewWorkflowStage.Running);
 
             var scanResult = await scanner.ScanAsync(project.NormalizedRootPath, cancellationToken);
             if (scanResult.IsFailure)
             {
-                return await FailAsync(reviewRun, "ScanFailed", null, cancellationToken);
+                return await FailAsync(reviewRun, stateMachine, "ScanFailed", null, cancellationToken);
             }
+            stateMachine.MoveTo(ReviewWorkflowStage.RepositoryScanned);
 
             var contextResult = await contextBuilder.BuildAsync(
                 project.NormalizedRootPath,
@@ -125,8 +151,9 @@ public sealed class ReviewOrchestrator(
                 cancellationToken);
             if (contextResult.IsFailure)
             {
-                return await FailAsync(reviewRun, "ContextFailed", null, cancellationToken);
+                return await FailAsync(reviewRun, stateMachine, "ContextFailed", null, cancellationToken);
             }
+            stateMachine.MoveTo(ReviewWorkflowStage.ContextBuilt);
 
             var agentStopwatch = Stopwatch.StartNew();
             var agentResult = await reviewAgent.RunAsync(
@@ -146,10 +173,12 @@ public sealed class ReviewOrchestrator(
                     agentResult.Error.Code);
                 return await FailAsync(
                     reviewRun,
+                    stateMachine,
                     MapAgentFailure(agentResult.Error.Code),
                     failedModelRun,
                     cancellationToken);
             }
+            stateMachine.MoveTo(ReviewWorkflowStage.AgentCompleted);
 
             var modelRun = CreateSuccessfulModelRun(reviewRun, agentResult.Value);
             var summary = JsonSerializer.Serialize(new
@@ -162,12 +191,23 @@ public sealed class ReviewOrchestrator(
                 agentResult.Value.DiscardedDuplicateCount
             });
             reviewRun.TryComplete(timeProvider.GetUtcNow(), summary);
+            stateMachine.MoveTo(ReviewWorkflowStage.Terminal);
             await store.CompleteAsync(
                 reviewRun,
                 agentResult.Value.Findings,
                 modelRun,
                 cancellationToken);
             return Result.Success((await store.GetAsync(reviewRun.Id, cancellationToken))!);
+        }
+        catch (WorkflowStepLimitExceededException exception)
+        {
+            logger.LogError(
+                "Review workflow exceeded max steps {MaxSteps} before {Step}.",
+                exception.MaxSteps,
+                exception.Step);
+            reviewRun.TryFail("StepLimitExceeded", timeProvider.GetUtcNow());
+            await store.FailAsync(reviewRun, null, CancellationToken.None);
+            return Result.Failure<ReviewReadModel>(ReviewWorkflowErrors.ExecutionFailed);
         }
         catch (OperationCanceledException)
         {
@@ -209,11 +249,13 @@ public sealed class ReviewOrchestrator(
 
     private async Task<Result<ReviewReadModel>> FailAsync(
         ReviewRun reviewRun,
+        ReviewWorkflowStateMachine stateMachine,
         string errorCode,
         AIModelRun? modelRun,
         CancellationToken cancellationToken)
     {
         reviewRun.TryFail(errorCode, timeProvider.GetUtcNow());
+        stateMachine.MoveTo(ReviewWorkflowStage.Terminal);
         await store.FailAsync(reviewRun, modelRun, cancellationToken);
         return Result.Failure<ReviewReadModel>(ReviewWorkflowErrors.ExecutionFailed);
     }
@@ -286,4 +328,8 @@ public static class ReviewWorkflowErrors
     public static readonly Error ExecutionFailed = Error.Failure(
         "review.execution_failed",
         "The review could not be completed.");
+
+    public static readonly Error DuplicateActiveReview = Error.Conflict(
+        "review.duplicate_active",
+        "An active review already exists for this project.");
 }

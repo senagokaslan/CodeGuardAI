@@ -1,6 +1,7 @@
 using CodeGuardAI.Application.Workflows;
 using CodeGuardAI.Domain.Observability;
 using CodeGuardAI.Domain.Tests;
+using CodeGuardAI.Infrastructure.Persistence.Concurrency;
 using Microsoft.EntityFrameworkCore;
 
 namespace CodeGuardAI.Infrastructure.Persistence;
@@ -50,7 +51,7 @@ internal sealed class EfTestWorkflowStore(CodeGuardDbContext dbContext) : ITestW
                        run.Status == AIModelRunStatus.Succeeded,
                 cancellationToken);
 
-    public async Task CompleteGenerationAsync(
+    public async Task<bool> TryCompleteGenerationAsync(
         IReadOnlyCollection<TestCase> testCases,
         AIModelRun modelRun,
         CancellationToken cancellationToken)
@@ -58,8 +59,26 @@ internal sealed class EfTestWorkflowStore(CodeGuardDbContext dbContext) : ITestW
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         dbContext.TestCases.AddRange(testCases);
         dbContext.AIModelRuns.Add(modelRun);
-        await dbContext.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return true;
+        }
+        catch (DbUpdateException exception) when (
+            WorkflowConcurrencyErrors.IsUniqueViolation(
+                exception,
+                WorkflowConcurrencyIndexes.SuccessfulTestGeneration))
+        {
+            await transaction.RollbackAsync(CancellationToken.None);
+            foreach (var entry in dbContext.ChangeTracker.Entries()
+                         .Where(entry => entry.State == EntityState.Added))
+            {
+                entry.State = EntityState.Detached;
+            }
+
+            return false;
+        }
     }
 
     public async Task SaveFailedModelRunAsync(
