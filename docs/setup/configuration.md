@@ -45,6 +45,15 @@ dotnet run --project src/CodeGuardAI.Api
 
 Environment variable değerlerini source control'a alınan scriptlere yazma. Production benzeri ortamlarda User Secrets kullanılmaz; süreç/host tarafından sağlanan environment variables veya ileride seçilecek secret store kullanılır.
 
+MCP stdio host yalnız kayıtlı repository kimliğini çözmek ve tool audit kaydı yazmak için database ayarına ihtiyaç duyar; Gemini anahtarı istemez. MCP istemcisi host'u başlatırken `Database__ConnectionString` değerini process environment üzerinden sağlamalıdır:
+
+```powershell
+$env:Database__ConnectionString = "<LOCAL_POSTGRES_CONNECTION_STRING>"
+dotnet run --project src/CodeGuardAI.McpHost
+```
+
+`CodeGuardAI.McpHost` stdout'u MCP protokolüne ayırır; uygulama logları stderr'e gider. MCP client process environment aktarımını destekliyorsa yalnız gereken değerleri allowlist etmek, parent process'in ilgisiz secret'larını miras bırakmaktan daha güvenlidir.
+
 ## Öncelik
 
 Aynı anahtar birden fazla kaynaktaysa son sağlayıcı kazanır. Bu proje için ilgili düşükten yükseğe sıra:

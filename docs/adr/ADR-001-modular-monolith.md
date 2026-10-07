@@ -12,7 +12,7 @@ Public contract ve hata davranışı `docs/project-scope.md` içinde tanımlıd�
 
 ## Karar
 
-Tek deploy edilen modüler monolit, dört production ve iki test projesiyle kurulacaktır:
+Ana uygulama tek deploy edilen modüler monolit olarak dört production ve iki test projesiyle kurulacaktır. Gün 22'de kanıtlanan yerel stdio process sınırı için aynı Application/Infrastructure graph'ını kullanan ince bir `CodeGuardAI.McpHost` executable'ı eklenmiştir; transport kararı [ADR-003](ADR-003-mcp-host.md) içinde kayıtlıdır:
 
 ```text
 CodeGuardAI.Api ----------------> CodeGuardAI.Application ------> CodeGuardAI.Domain
@@ -20,6 +20,10 @@ CodeGuardAI.Api ----------------> CodeGuardAI.Application ------> CodeGuardAI.Do
        +-----------------------> CodeGuardAI.Infrastructure ----> CodeGuardAI.Application
                                            |
                                            +-------------------> CodeGuardAI.Domain
+
+CodeGuardAI.McpHost -----------> CodeGuardAI.Application
+       |
+       +-----------------------> CodeGuardAI.Infrastructure
 
 CodeGuardAI.UnitTests ---------> Application + Domain
 CodeGuardAI.IntegrationTests --> Api (production graph'a transitif erişim)
@@ -33,6 +37,7 @@ Production project reference allowlist'i:
 | `CodeGuardAI.Application` | Domain | Infrastructure, API ve test projeleri |
 | `CodeGuardAI.Infrastructure` | Application, Domain | API ve test projeleri |
 | `CodeGuardAI.Api` | Application, Infrastructure | Test projeleri |
+| `CodeGuardAI.McpHost` | Application, Infrastructure | API, Domain'e doğrudan referans ve test projeleri |
 
 API'nin Infrastructure referansı yalnız composition root'ta port-adapter wiring içindir. Controller'lar Infrastructure type'larını use case girdisi/çıktısı olarak kullanamaz. Bu kural bugünün iskeletinde code review ile, sonraki bileşenlerde test ve yapılandırma konvansiyonlarıyla korunur.
 
@@ -42,7 +47,7 @@ API'nin Infrastructure referansı yalnız composition root'ta port-adapter wirin
 - Infrastructure'ın hem Application hem Domain referansı adapter/mapping için bilinçlidir; Domain'in ters yönde referansı yoktur.
 - API'nin Infrastructure referansı kötüye kullanılabilir. Bu kalan risk, composition-root kuralı ve architecture testleriyle izlenecektir.
 - Ayrı projeler küçük MVP'de dosya/boilerplate maliyeti yaratır; buna karşılık dış servisleri fake adapter'larla değiştirmek ve bağımlılık ihlalini erken yakalamak kolaylaşır.
-- Cross-module ihtiyaç kanıtlanmadan yeni production projesi veya generic repository katmanı eklenmez.
+- Cross-module ihtiyaç kanıtlanmadan yeni production projesi veya generic repository katmanı eklenmez. MCP host istisnası, stdout'u yalnız stdio protokolüne ayırmak ve SDK bağımlılığını API/Application'dan izole etmek için ADR-003 ile kabul edilmiştir.
 
 ## Başarısızlık davranışı ve doğrulama
 

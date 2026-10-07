@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.4" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4">
       <PrivateAssets>all</PrivateAssets>
@@ -17,6 +18,7 @@
     <ProjectReference Include="..\..\src\CodeGuardAI.Application\CodeGuardAI.Application.csproj" />
     <ProjectReference Include="..\..\src\CodeGuardAI.Domain\CodeGuardAI.Domain.csproj" />
     <ProjectReference Include="..\..\src\CodeGuardAI.Infrastructure\CodeGuardAI.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\CodeGuardAI.McpHost\CodeGuardAI.McpHost.csproj" />
   </ItemGroup>
 
 </Project>

@@ -14,7 +14,8 @@ public sealed class ProjectReferenceTests
             ["CodeGuardAI.Domain"] = [],
             ["CodeGuardAI.Application"] = ["CodeGuardAI.Domain"],
             ["CodeGuardAI.Infrastructure"] = ["CodeGuardAI.Application", "CodeGuardAI.Domain"],
-            ["CodeGuardAI.Api"] = ["CodeGuardAI.Application", "CodeGuardAI.Infrastructure"]
+            ["CodeGuardAI.Api"] = ["CodeGuardAI.Application", "CodeGuardAI.Infrastructure"],
+            ["CodeGuardAI.McpHost"] = ["CodeGuardAI.Application", "CodeGuardAI.Infrastructure"]
         };
 
         foreach (var (projectName, expected) in expectedReferences)
@@ -25,6 +26,27 @@ public sealed class ProjectReferenceTests
             Assert.Equal(expected.Order(StringComparer.Ordinal), actual);
             Assert.DoesNotContain(actual, reference => reference.EndsWith("Tests", StringComparison.Ordinal));
         }
+    }
+
+    [Fact]
+    public void Mcp_sdk_is_isolated_to_the_mcp_host()
+    {
+        var repositoryRoot = FindRepositoryRoot();
+        var productionProjects = Directory.GetFiles(
+            Path.Combine(repositoryRoot, "src"),
+            "*.csproj",
+            SearchOption.AllDirectories);
+
+        var projectsWithMcpPackage = productionProjects
+            .Where(project => XDocument.Load(project)
+                .Descendants("PackageReference")
+                .Any(reference => (reference.Attribute("Include")?.Value ?? string.Empty)
+                    .StartsWith("ModelContextProtocol", StringComparison.Ordinal)))
+            .Select(project => Path.GetFileNameWithoutExtension(project)!)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(["CodeGuardAI.McpHost"], projectsWithMcpPackage);
     }
 
     private static string[] ReadProjectReferences(string projectPath)
