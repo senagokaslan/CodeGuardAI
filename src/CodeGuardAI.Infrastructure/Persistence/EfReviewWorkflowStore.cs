@@ -1,3 +1,4 @@
+using System.Text.Json;
 using CodeGuardAI.Application.Workflows;
 using CodeGuardAI.Domain.Observability;
 using CodeGuardAI.Domain.Projects;
@@ -145,6 +146,24 @@ internal sealed class EfReviewWorkflowStore(CodeGuardDbContext dbContext) : IRev
             review.StartedAtUtc,
             review.CompletedAtUtc,
             review.ErrorCode,
+            ParseScanSummary(review.ScanSummaryJson),
             findings);
+    }
+
+    private static ReviewScanSummaryReadModel? ParseScanSummary(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<ReviewScanSummaryReadModel>(value);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 }

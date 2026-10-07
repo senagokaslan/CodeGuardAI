@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using CodeGuardAI.Api.Contracts.Reviews;
 using CodeGuardAI.Application.LLM;
 using CodeGuardAI.Application.Tools;
@@ -28,6 +29,7 @@ public sealed class ReviewFlowTests : IDisposable
     {
         Directory.CreateDirectory(_repositoryRoot);
         File.WriteAllText(Path.Combine(_repositoryRoot, "Source.cs"), "public class Source {}");
+        File.WriteAllText(Path.Combine(_repositoryRoot, "README.md"), "Not part of review context.");
     }
 
     [Fact]
@@ -53,6 +55,8 @@ public sealed class ReviewFlowTests : IDisposable
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
         Assert.NotNull(body);
         Assert.Equal("Completed", body.Status);
+        Assert.Equal(1, body.ScanSummary?.IncludedFileCount);
+        Assert.Equal(1, body.ScanSummary?.SkippedEntryCount);
         Assert.Single(body.Findings);
         Assert.Equal([ReviewStatus.Pending, ReviewStatus.Running, ReviewStatus.Completed], store.Transitions);
         Assert.Equal(1, store.AtomicCompletionCount);
@@ -266,6 +270,9 @@ public sealed class ReviewFlowTests : IDisposable
                 reviewRun.StartedAtUtc,
                 reviewRun.CompletedAtUtc,
                 reviewRun.ErrorCode,
+                string.IsNullOrWhiteSpace(reviewRun.ScanSummaryJson)
+                    ? null
+                    : JsonSerializer.Deserialize<ReviewScanSummaryReadModel>(reviewRun.ScanSummaryJson),
                 Findings.Select(finding => new ReviewFindingReadModel(
                     finding.Id,
                     finding.FilePath,

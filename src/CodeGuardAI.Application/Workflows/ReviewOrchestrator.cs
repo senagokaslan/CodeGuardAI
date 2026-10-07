@@ -70,6 +70,11 @@ public sealed record ReviewFindingReadModel(
     string Suggestion,
     decimal Confidence);
 
+public sealed record ReviewScanSummaryReadModel(
+    int IncludedFileCount,
+    int SkippedEntryCount,
+    long IncludedBytes);
+
 public sealed record ReviewReadModel(
     Guid Id,
     Guid ProjectId,
@@ -79,6 +84,7 @@ public sealed record ReviewReadModel(
     DateTimeOffset StartedAtUtc,
     DateTimeOffset? CompletedAtUtc,
     string? ErrorCode,
+    ReviewScanSummaryReadModel? ScanSummary,
     IReadOnlyList<ReviewFindingReadModel> Findings);
 
 public sealed class ReviewOrchestrator(
@@ -184,6 +190,7 @@ public sealed class ReviewOrchestrator(
             var summary = JsonSerializer.Serialize(new
             {
                 scanResult.Value.IncludedFileCount,
+                SkippedEntryCount = scanResult.Value.Entries.Count(entry => !entry.IsIncluded),
                 scanResult.Value.IncludedBytes,
                 ContextCharacters = contextResult.Value.CharacterCount,
                 FindingCount = agentResult.Value.Findings.Count,

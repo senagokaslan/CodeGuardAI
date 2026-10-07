@@ -12,6 +12,11 @@ public sealed record ReviewFindingResponse(
     string Suggestion,
     decimal Confidence);
 
+public sealed record ReviewScanSummaryResponse(
+    int IncludedFileCount,
+    int SkippedEntryCount,
+    long IncludedBytes);
+
 public sealed record ReviewResponse(
     Guid Id,
     Guid ProjectId,
@@ -21,6 +26,7 @@ public sealed record ReviewResponse(
     DateTimeOffset StartedAtUtc,
     DateTimeOffset? CompletedAtUtc,
     string? ErrorCode,
+    ReviewScanSummaryResponse? ScanSummary,
     IReadOnlyList<ReviewFindingResponse> Findings);
 
 public sealed record ReviewHistoryResponse(IReadOnlyList<ReviewResponse> Items);

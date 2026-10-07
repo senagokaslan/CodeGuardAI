@@ -143,6 +143,12 @@ public sealed class ReviewsController(
             review.StartedAtUtc,
             review.CompletedAtUtc,
             review.ErrorCode,
+            review.ScanSummary is null
+                ? null
+                : new ReviewScanSummaryResponse(
+                    review.ScanSummary.IncludedFileCount,
+                    review.ScanSummary.SkippedEntryCount,
+                    review.ScanSummary.IncludedBytes),
             review.Findings.Select(finding => new ReviewFindingResponse(
                 finding.Id,
                 finding.FilePath,

@@ -327,6 +327,7 @@ public sealed class WorkflowSafetyTests : IDisposable
             reviewRun.StartedAtUtc,
             reviewRun.CompletedAtUtc,
             reviewRun.ErrorCode,
+            null,
             []);
     }
 }

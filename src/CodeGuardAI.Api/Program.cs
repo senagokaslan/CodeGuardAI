@@ -15,6 +15,8 @@ var app = builder.Build();
 
 app.UseExceptionHandler();
 app.UseStatusCodePages();
+app.UseDefaultFiles();
+app.UseStaticFiles();
 
 if (app.Environment.IsDevelopment())
 {
@@ -24,8 +26,6 @@ if (app.Environment.IsDevelopment())
         options.SwaggerEndpoint("/openapi/v1.json", "CodeGuard AI API v1");
         options.DocumentTitle = "CodeGuard AI API";
     });
-    app.MapGet("/", () => Results.Redirect("/swagger"))
-        .ExcludeFromDescription();
 }
 
 app.MapControllers();

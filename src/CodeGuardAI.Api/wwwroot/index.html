@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A focused local dashboard for CodeGuard AI reviews and test suggestions.">
+  <title>CodeGuard AI · Review workspace</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#workspace">Skip to workspace</a>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="CodeGuard AI home">
+      <span class="brand-mark" aria-hidden="true">CG</span>
+      <span>CodeGuard <strong>AI</strong></span>
+    </a>
+    <div class="environment"><span class="pulse" aria-hidden="true"></span> Local workspace</div>
+  </header>
+
+  <main id="workspace">
+    <section class="hero" aria-labelledby="hero-title">
+      <div>
+        <p class="eyebrow">Repository intelligence, kept deliberate</p>
+        <h1 id="hero-title">Review code with a workflow you can see.</h1>
+        <p class="hero-copy">Register a server-local repository, run a bounded review, filter grounded findings, then explicitly choose what becomes a test suggestion.</p>
+      </div>
+      <ol class="flow" aria-label="Demo workflow">
+        <li class="active"><span>01</span> Project</li>
+        <li><span>02</span> Review</li>
+        <li><span>03</span> Findings</li>
+        <li><span>04</span> Tests</li>
+      </ol>
+    </section>
+
+    <div id="global-message" class="message" role="status" aria-live="polite" hidden></div>
+
+    <div class="workspace-grid">
+      <aside class="panel projects-panel" aria-labelledby="projects-title">
+        <div class="panel-heading">
+          <div>
+            <p class="section-kicker">Step 01</p>
+            <h2 id="projects-title">Projects</h2>
+          </div>
+          <button id="refresh-projects" class="icon-button" type="button" aria-label="Refresh projects" title="Refresh projects">↻</button>
+        </div>
+
+        <form id="project-form" class="stacked-form">
+          <div class="field">
+            <label for="project-name">Project name</label>
+            <input id="project-name" name="name" maxlength="120" autocomplete="off" required placeholder="Payments service">
+          </div>
+          <div class="field">
+            <label for="repository-path">Repository path</label>
+            <input id="repository-path" name="repositoryPath" maxlength="500" autocomplete="off" required aria-describedby="path-help" placeholder="C:\repos\payments">
+            <p id="path-help" class="field-help"><strong>Server-local path.</strong> This is resolved on the machine running CodeGuard AI. It is not a browser folder picker and no files are uploaded.</p>
+          </div>
+          <button class="button primary" type="submit">Add project</button>
+        </form>
+
+        <div id="projects-state" class="inline-state" role="status" aria-live="polite">Loading projects…</div>
+        <div id="project-list" class="project-list" aria-label="Available projects"></div>
+      </aside>
+
+      <section class="main-column" aria-label="Review workflow">
+        <section class="panel review-panel" aria-labelledby="review-title">
+          <div class="panel-heading split-heading">
+            <div>
+              <p class="section-kicker">Step 02</p>
+              <h2 id="review-title">Start a review</h2>
+              <p id="selected-project" class="selection-copy">Select a project to continue.</p>
+            </div>
+            <span id="review-status" class="status-chip neutral">Not started</span>
+          </div>
+
+          <form id="review-form" class="review-form">
+            <div class="field grow">
+              <label for="review-model">Gemini model</label>
+              <input id="review-model" name="model" maxlength="200" autocomplete="off" required placeholder="Configured model name">
+            </div>
+            <div class="field compact">
+              <label for="max-findings">Max findings</label>
+              <input id="max-findings" name="maxFindings" type="number" min="1" max="500" value="100" required>
+            </div>
+            <button id="start-review" class="button primary" type="submit" disabled>Run review</button>
+            <button id="cancel-review" class="button ghost" type="button" hidden>Cancel request</button>
+          </form>
+
+          <div id="review-progress" class="progress-card" aria-live="polite" hidden>
+            <span class="spinner" aria-hidden="true"></span>
+            <div><strong>Review in progress</strong><p>Scanning, preparing context, and waiting for the model. The request stays bounded by server policy.</p></div>
+          </div>
+
+          <div id="scan-summary" class="stats" aria-label="Repository scan summary" hidden>
+            <div><span id="included-count">0</span><small>Included files</small></div>
+            <div><span id="skipped-count">0</span><small>Skipped entries</small></div>
+            <div><span id="included-bytes">0 B</span><small>Included bytes</small></div>
+            <div><span id="finding-count">0</span><small>Findings</small></div>
+          </div>
+        </section>
+
+        <section class="panel findings-panel" aria-labelledby="findings-title">
+          <div class="panel-heading findings-heading">
+            <div>
+              <p class="section-kicker">Step 03</p>
+              <h2 id="findings-title">Findings</h2>
+            </div>
+            <span id="visible-findings" class="count-badge">0 visible</span>
+          </div>
+
+          <div class="filters" aria-label="Finding filters">
+            <div class="field">
+              <label for="severity-filter">Severity</label>
+              <select id="severity-filter">
+                <option value="">All severities</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="category-filter">Category</label>
+              <select id="category-filter">
+                <option value="">All categories</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="findings-state" class="empty-state">
+            <span aria-hidden="true">⌁</span>
+            <strong>No review results yet</strong>
+            <p>Choose a project and run a review. Results will appear here without leaving the page.</p>
+          </div>
+          <div id="findings-list" class="findings-list"></div>
+        </section>
+
+        <section class="panel tests-panel" aria-labelledby="tests-title">
+          <div class="panel-heading split-heading">
+            <div>
+              <p class="section-kicker">Step 04</p>
+              <h2 id="tests-title">Test suggestions</h2>
+              <p class="selection-copy"><span id="selected-findings-count">0</span> findings selected. Generation never starts automatically.</p>
+            </div>
+            <button id="generate-tests" class="button accent" type="button" disabled>Generate tests</button>
+          </div>
+          <div id="tests-state" class="inline-state" role="status" aria-live="polite">Select one or more findings, then explicitly generate suggestions.</div>
+          <div id="tests-list" class="tests-list"></div>
+        </section>
+      </section>
+    </div>
+  </main>
+
+  <footer>
+    <span>CodeGuard AI</span>
+    <a href="/swagger" rel="noreferrer">API reference</a>
+  </footer>
+</body>
+</html>
