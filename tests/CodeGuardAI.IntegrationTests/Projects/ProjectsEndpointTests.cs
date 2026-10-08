@@ -4,6 +4,7 @@ using System.Text.Json;
 using CodeGuardAI.Api.Contracts.Projects;
 using CodeGuardAI.Application.Common;
 using CodeGuardAI.Application.Projects;
+using CodeGuardAI.Application.Repositories;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -32,7 +33,7 @@ public sealed class ProjectsEndpointTests
         await using var factory = CreateFactory(service);
         using var client = factory.CreateClient();
 
-        using var response = await client.PostAsJsonAsync("/projects", new CreateProjectRequest
+        using var response = await client.PostAsJsonAsync("/api/projects", new CreateProjectRequest
         {
             Name = "CodeGuard AI",
             RepositoryPath = "C:/repos/CodeGuard"
@@ -40,7 +41,7 @@ public sealed class ProjectsEndpointTests
         var body = await response.Content.ReadFromJsonAsync<ProjectResponse>();
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        Assert.Equal($"/projects/{ProjectId}", response.Headers.Location?.AbsolutePath);
+        Assert.Equal($"/api/projects/{ProjectId}", response.Headers.Location?.ToString());
         Assert.NotNull(body);
         Assert.Equal(ProjectId, body.Id);
     }
@@ -55,7 +56,7 @@ public sealed class ProjectsEndpointTests
         await using var factory = CreateFactory(service);
         using var client = factory.CreateClient();
 
-        using var response = await client.PostAsJsonAsync("/projects", new CreateProjectRequest
+        using var response = await client.PostAsJsonAsync("/api/projects", new CreateProjectRequest
         {
             Name = "CodeGuard AI",
             RepositoryPath = "C:/repos/CodeGuard"
@@ -76,7 +77,7 @@ public sealed class ProjectsEndpointTests
         await using var factory = CreateFactory(service);
         using var client = factory.CreateClient();
 
-        using var response = await client.GetAsync($"/projects?page=1&pageSize={ProjectLimits.MaxPageSize + 1}");
+        using var response = await client.GetAsync($"/api/projects?page=1&pageSize={ProjectLimits.MaxPageSize + 1}");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal(0, service.ListCallCount);
@@ -92,14 +93,49 @@ public sealed class ProjectsEndpointTests
         await using var factory = CreateFactory(service);
         using var client = factory.CreateClient();
 
-        using var response = await client.GetAsync($"/projects/{Guid.NewGuid()}");
+        using var response = await client.GetAsync($"/api/projects/{Guid.NewGuid()}");
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.Equal("project.not_found", json.RootElement.GetProperty("code").GetString());
     }
 
-    private static WebApplicationFactory<Program> CreateFactory(StubProjectService service)
+    [Fact]
+    public async Task Scan_uses_registered_project_root_and_returns_skip_reasons()
+    {
+        const string registeredRoot = "C:/normalized/repository";
+        var service = new StubProjectService
+        {
+            GetResult = Result.Success(new ProjectReadModel(
+                ProjectId,
+                "CodeGuard AI",
+                registeredRoot,
+                CreatedAtUtc))
+        };
+        var scanner = new RecordingScanner(new ScanManifest(
+            [
+                new ScanManifestEntry("src/Program.cs", 120, RepositoryLanguage.CSharp, ScanEntryKind.File, ScanSkipReason.None),
+                new ScanManifestEntry(".env", 40, RepositoryLanguage.Unknown, ScanEntryKind.File, ScanSkipReason.SensitivePath)
+            ],
+            1,
+            120));
+        await using var factory = CreateFactory(service, scanner);
+        using var client = factory.CreateClient();
+
+        using var response = await client.PostAsync($"/api/projects/{ProjectId}/scan", null);
+        var body = await response.Content.ReadFromJsonAsync<ProjectScanResponse>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(registeredRoot, scanner.RepositoryRoot);
+        Assert.NotNull(body);
+        Assert.Equal(1, body.IncludedFileCount);
+        Assert.Equal(1, body.SkippedEntryCount);
+        Assert.Equal("SensitivePath", body.Entries[1].SkipReason);
+    }
+
+    private static WebApplicationFactory<Program> CreateFactory(
+        StubProjectService service,
+        IRepositoryScanner? scanner = null)
     {
         return new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
@@ -110,7 +146,9 @@ public sealed class ProjectsEndpointTests
                 builder.ConfigureServices(services =>
                 {
                     services.RemoveAll<IProjectService>();
+                    services.RemoveAll<IRepositoryScanner>();
                     services.AddSingleton<IProjectService>(service);
+                    services.AddSingleton(scanner ?? new RecordingScanner(new ScanManifest([], 0, 0)));
                 });
             });
     }
@@ -148,6 +186,19 @@ public sealed class ProjectsEndpointTests
         {
             ListCallCount++;
             return Task.FromResult(Result.Success(new ProjectPage([], page, pageSize)));
+        }
+    }
+
+    private sealed class RecordingScanner(ScanManifest result) : IRepositoryScanner
+    {
+        public string? RepositoryRoot { get; private set; }
+
+        public Task<Result<ScanManifest>> ScanAsync(
+            string repositoryRoot,
+            CancellationToken cancellationToken)
+        {
+            RepositoryRoot = repositoryRoot;
+            return Task.FromResult(Result.Success(result));
         }
     }
 }

@@ -72,6 +72,24 @@ public sealed class HealthEndpointTests
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
+    [Fact]
+    public async Task Root_serves_same_origin_demo_with_scan_and_history_controls()
+    {
+        await using var factory = CreateFactory(Environments.Development);
+        using var client = factory.CreateClient();
+
+        using var response = await client.GetAsync("/");
+        var html = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("text/html", response.Content.Headers.ContentType?.MediaType);
+        Assert.Contains("id=\"scan-project\"", html, StringComparison.Ordinal);
+        Assert.Contains("id=\"history-list\"", html, StringComparison.Ordinal);
+        Assert.Contains("id=\"severity-filter\"", html, StringComparison.Ordinal);
+        Assert.Contains("id=\"category-filter\"", html, StringComparison.Ordinal);
+        Assert.Contains("id=\"generate-tests\"", html, StringComparison.Ordinal);
+    }
+
     private static WebApplicationFactory<Program> CreateFactory(string environment)
     {
         return new WebApplicationFactory<Program>()

@@ -3,6 +3,7 @@
 const state = {
   projects: [],
   selectedProject: null,
+  reviews: [],
   review: null,
   findings: [],
   selectedFindingIds: new Set(),
@@ -21,6 +22,7 @@ const elements = {
   reviewForm: document.querySelector("#review-form"),
   reviewModel: document.querySelector("#review-model"),
   maxFindings: document.querySelector("#max-findings"),
+  scanProject: document.querySelector("#scan-project"),
   startReview: document.querySelector("#start-review"),
   cancelReview: document.querySelector("#cancel-review"),
   reviewStatus: document.querySelector("#review-status"),
@@ -30,6 +32,9 @@ const elements = {
   skippedCount: document.querySelector("#skipped-count"),
   includedBytes: document.querySelector("#included-bytes"),
   findingCount: document.querySelector("#finding-count"),
+  scanDetails: document.querySelector("#scan-details"),
+  historyState: document.querySelector("#history-state"),
+  historyList: document.querySelector("#history-list"),
   severityFilter: document.querySelector("#severity-filter"),
   categoryFilter: document.querySelector("#category-filter"),
   visibleFindings: document.querySelector("#visible-findings"),
@@ -96,7 +101,7 @@ async function loadProjects() {
   elements.projectsState.textContent = "Loading projects…";
   elements.refreshProjects.disabled = true;
   try {
-    const response = await apiFetch("/projects?page=1&pageSize=50");
+    const response = await apiFetch("/api/projects?page=1&pageSize=50");
     state.projects = response.items || [];
     renderProjects();
   } catch (error) {
@@ -130,15 +135,19 @@ function renderProjects() {
 
 function selectProject(project) {
   state.selectedProject = project;
+  state.reviews = [];
   state.review = null;
   state.findings = [];
   state.selectedFindingIds.clear();
   elements.selectedProject.textContent = `${project.name} · ${project.repositoryPath}`;
   elements.startReview.disabled = false;
+  elements.scanProject.disabled = false;
   updateReviewStatus("Not started", "neutral");
   elements.scanSummary.hidden = true;
   resetResults();
+  renderHistory();
   renderProjects();
+  loadReviewHistory(project.id);
 }
 
 function resetResults() {
@@ -150,6 +159,7 @@ function resetResults() {
   elements.findingsState.querySelector("p").textContent = "Run a review for the selected project. Results will appear here without leaving the page.";
   elements.testsList.replaceChildren();
   elements.testsState.textContent = "Select one or more findings, then explicitly generate suggestions.";
+  elements.scanDetails.hidden = true;
   updateSelectionState();
   elements.visibleFindings.textContent = "0 visible";
 }
@@ -160,7 +170,7 @@ async function createProject(event) {
   const button = elements.projectForm.querySelector("button[type='submit']");
   setBusy(button, true, "Adding…");
   try {
-    const project = await apiFetch("/projects", {
+    const project = await apiFetch("/api/projects", {
       method: "POST",
       body: JSON.stringify({
         name: elements.projectName.value.trim(),
@@ -178,6 +188,101 @@ async function createProject(event) {
   }
 }
 
+async function scanProject() {
+  if (!state.selectedProject) return;
+  clearMessage();
+  setBusy(elements.scanProject, true, "Scanning…");
+  try {
+    const scan = await apiFetch(`/api/projects/${encodeURIComponent(state.selectedProject.id)}/scan`, {
+      method: "POST"
+    });
+    elements.includedCount.textContent = String(scan.includedFileCount);
+    elements.skippedCount.textContent = String(scan.skippedEntryCount);
+    elements.includedBytes.textContent = formatBytes(scan.includedBytes);
+    elements.findingCount.textContent = "—";
+    elements.scanSummary.hidden = false;
+
+    const skipCounts = (scan.entries || [])
+      .filter(entry => !entry.isIncluded)
+      .reduce((counts, entry) => {
+        counts[entry.skipReason] = (counts[entry.skipReason] || 0) + 1;
+        return counts;
+      }, {});
+    const skipSummary = Object.entries(skipCounts)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([reason, count]) => `${reason}: ${count}`)
+      .join(" · ");
+    elements.scanDetails.textContent = skipSummary || "No entries were skipped by the repository policy.";
+    elements.scanDetails.hidden = false;
+    showMessage("Repository scan completed. The review will repeat the same bounded scan before sending context to the model.", "success");
+  } catch (error) {
+    showMessage(`Repository scan failed. ${error.message}`);
+  } finally {
+    setBusy(elements.scanProject, false, "Scanning…");
+    elements.scanProject.disabled = !state.selectedProject;
+  }
+}
+
+async function loadReviewHistory(projectId) {
+  elements.historyState.hidden = false;
+  elements.historyState.textContent = "Loading review history…";
+  elements.historyList.replaceChildren();
+  try {
+    const response = await apiFetch(`/api/projects/${encodeURIComponent(projectId)}/reviews`);
+    if (state.selectedProject?.id !== projectId) return;
+    state.reviews = response.items || [];
+    renderHistory();
+  } catch (error) {
+    if (state.selectedProject?.id !== projectId) return;
+    state.reviews = [];
+    elements.historyState.hidden = false;
+    elements.historyState.textContent = `Review history could not be loaded. ${error.message}`;
+  }
+}
+
+function renderHistory() {
+  elements.historyList.replaceChildren();
+  if (!state.selectedProject) {
+    elements.historyState.hidden = false;
+    elements.historyState.textContent = "Select a project to load previous reviews.";
+    return;
+  }
+  if (state.reviews.length === 0) {
+    elements.historyState.hidden = false;
+    elements.historyState.textContent = "No previous reviews for this project.";
+    return;
+  }
+
+  elements.historyState.hidden = true;
+  state.reviews.forEach(review => {
+    const button = makeElement("button", "history-card");
+    button.type = "button";
+    button.setAttribute("aria-pressed", String(state.review?.id === review.id));
+    if (state.review?.id === review.id) button.classList.add("selected");
+    const status = makeElement("span", `status-chip ${review.status.toLowerCase()}`, review.status);
+    const summary = makeElement("span", "history-summary", `${review.model} · ${(review.findings || []).length} findings`);
+    const date = makeElement("time", "history-time", new Date(review.startedAtUtc).toLocaleString());
+    date.dateTime = review.startedAtUtc;
+    button.append(status, summary, date);
+    button.addEventListener("click", () => showReview(review));
+    elements.historyList.append(button);
+  });
+}
+
+function showReview(review) {
+  state.review = review;
+  state.findings = review.findings || [];
+  state.selectedFindingIds.clear();
+  updateReviewStatus(review.status, review.status.toLowerCase());
+  renderScanSummary(review);
+  populateFilters();
+  renderFindings();
+  elements.testsList.replaceChildren();
+  elements.testsState.textContent = "Select one or more findings, then explicitly generate suggestions.";
+  updateSelectionState();
+  renderHistory();
+}
+
 async function startReview(event) {
   event.preventDefault();
   if (!state.selectedProject) return;
@@ -189,7 +294,7 @@ async function startReview(event) {
   updateReviewStatus("Running", "running");
   resetResults();
   try {
-    const review = await apiFetch("/reviews", {
+    const review = await apiFetch("/api/reviews", {
       method: "POST",
       signal: state.reviewController.signal,
       body: JSON.stringify({
@@ -199,12 +304,8 @@ async function startReview(event) {
         maxFindings: Number(elements.maxFindings.value)
       })
     });
-    state.review = review;
-    state.findings = review.findings || [];
-    updateReviewStatus(review.status, review.status.toLowerCase());
-    renderScanSummary(review);
-    populateFilters();
-    renderFindings();
+    state.reviews = [review, ...state.reviews.filter(item => item.id !== review.id)];
+    showReview(review);
     showMessage(`Review completed with ${state.findings.length} finding${state.findings.length === 1 ? "" : "s"}.`, "success");
   } catch (error) {
     if (error.name === "AbortError") {
@@ -239,6 +340,7 @@ function renderScanSummary(review) {
   elements.includedBytes.textContent = formatBytes(summary.includedBytes);
   elements.findingCount.textContent = String((review.findings || []).length);
   elements.scanSummary.hidden = false;
+  elements.scanDetails.hidden = true;
 }
 
 function populateFilters() {
@@ -289,6 +391,7 @@ function createFindingCard(finding) {
   top.append(makeElement("span", `tag severity-${finding.severity.toLowerCase()}`, finding.severity));
   top.append(makeElement("span", "tag", finding.category));
   top.append(makeElement("span", "finding-path", `${finding.filePath}:${finding.startLine}-${finding.endLine}`));
+  top.append(makeElement("span", "confidence", `Confidence ${Math.round(Number(finding.confidence) * 100)}%`));
   content.append(top);
   content.append(makeElement("h3", "", finding.title));
   content.append(makeElement("p", "", finding.reason));
@@ -349,6 +452,7 @@ function renderTests(tests) {
 elements.projectForm.addEventListener("submit", createProject);
 elements.refreshProjects.addEventListener("click", loadProjects);
 elements.reviewForm.addEventListener("submit", startReview);
+elements.scanProject.addEventListener("click", scanProject);
 elements.cancelReview.addEventListener("click", () => state.reviewController?.abort());
 elements.severityFilter.addEventListener("change", renderFindings);
 elements.categoryFilter.addEventListener("change", renderFindings);

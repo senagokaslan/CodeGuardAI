@@ -57,10 +57,10 @@ public sealed class WorkflowSafetyTests : IDisposable
         using var client = factory.CreateClient();
         var request = CreateRequest();
 
-        var firstRequest = client.PostAsJsonAsync("/reviews", request);
+        var firstRequest = client.PostAsJsonAsync("/api/reviews", request);
         await store.FirstRunIsRunning.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
-        using var duplicate = await client.PostAsJsonAsync("/reviews", request);
+        using var duplicate = await client.PostAsJsonAsync("/api/reviews", request);
         using var duplicateBody = JsonDocument.Parse(await duplicate.Content.ReadAsStringAsync());
 
         Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
@@ -86,7 +86,7 @@ public sealed class WorkflowSafetyTests : IDisposable
         using var client = factory.CreateClient();
         using var cancellation = new CancellationTokenSource();
 
-        var request = client.PostAsJsonAsync("/reviews", CreateRequest(), cancellation.Token);
+        var request = client.PostAsJsonAsync("/api/reviews", CreateRequest(), cancellation.Token);
         await provider.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
         cancellation.Cancel();
 

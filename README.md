@@ -160,7 +160,7 @@ Tehdit modeli ve kalan riskler için [güvenlik belgesine](docs/security.md) bak
 - [x] CV maddeleri yalnız test veya kaynak kodla kanıtlanabilen özelliklerden oluşuyor.
 - [x] Offline Release build/test yeşil ve database test sınırı açık.
 - [x] Repository secret taraması temiz.
-- [ ] Geçerli bir Gemini API key ile başarılı review/test önerisi demosu ve sonuç ekranları yeniden çekilecek; mevcut local key provider tarafından `API_KEY_INVALID` olarak reddedildi.
+- [x] Geçerli Gemini auth key ile `gemini-3.5-flash-lite` üzerinde gerçek review ve test önerisi akışı doğrulandı; secret yalnız User Secrets'ta tutuldu.
 - [x] [GitHub hosted CI run](https://github.com/senagokaslan/CodeGuardAI/actions/runs/37807822247) secretsiz restore, build, unit/eval ve API/integration adımlarıyla yeşil doğrulandı.
 
 ## Dokümantasyon haritası
@@ -171,4 +171,5 @@ Tehdit modeli ve kalan riskler için [güvenlik belgesine](docs/security.md) bak
 - [Test stratejisi](docs/testing.md)
 - [Evaluation sözlüğü](docs/evaluation.md)
 - [Workflow safety](docs/workflow-safety.md)
+- [Tamamlanma kriterleri ve final teknik flow](docs/completion-verification.md)
 - [ADR kayıtları](docs/adr)

@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace CodeGuardAI.Api.Controllers;
 
 [ApiController]
+[Route("api/reviews")]
 [Route("reviews")]
 public sealed class ReviewsController(
     IReviewOrchestrator orchestrator,
@@ -51,6 +52,7 @@ public sealed class ReviewsController(
             : ResultErrorMapper.ToActionResult(result.Error, HttpContext);
     }
 
+    [HttpGet("/api/projects/{projectId:guid}/reviews")]
     [HttpGet("/projects/{projectId:guid}/reviews")]
     [ProducesResponseType<ReviewHistoryResponse>(StatusCodes.Status200OK)]
     public async Task<ActionResult<ReviewHistoryResponse>> History(
@@ -63,7 +65,7 @@ public sealed class ReviewsController(
             : ResultErrorMapper.ToActionResult(result.Error, HttpContext);
     }
 
-    [HttpPost("/api/reviews/{id:guid}/tests")]
+    [HttpPost("{id:guid}/tests")]
     [ProducesResponseType<TestSuggestionBatchResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
@@ -101,7 +103,7 @@ public sealed class ReviewsController(
         return Created($"/api/reviews/{id}/tests", response);
     }
 
-    [HttpPost("/api/reviews/{id:guid}/test-runs")]
+    [HttpPost("{id:guid}/test-runs")]
     [ProducesResponseType<TestRunResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]

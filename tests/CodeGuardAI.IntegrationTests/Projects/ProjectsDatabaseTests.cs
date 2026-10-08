@@ -37,14 +37,14 @@ public sealed class ProjectsDatabaseTests
                 RepositoryPath = repositoryPath
             };
 
-            using var created = await client.PostAsJsonAsync("/projects", request);
+            using var created = await client.PostAsJsonAsync("/api/projects", request);
             var createdProject = await created.Content.ReadFromJsonAsync<ProjectResponse>();
 
             Assert.Equal(HttpStatusCode.Created, created.StatusCode);
             Assert.NotNull(createdProject);
-            Assert.Equal($"/projects/{createdProject.Id}", created.Headers.Location?.AbsolutePath);
+            Assert.Equal($"/api/projects/{createdProject.Id}", created.Headers.Location?.ToString());
 
-            using var duplicate = await client.PostAsJsonAsync("/projects", new CreateProjectRequest
+            using var duplicate = await client.PostAsJsonAsync("/api/projects", new CreateProjectRequest
             {
                 Name = "Same Repository",
                 RepositoryPath = repositoryPath + Path.DirectorySeparatorChar
@@ -54,7 +54,7 @@ public sealed class ProjectsDatabaseTests
             using var get = await client.GetAsync(created.Headers.Location);
             Assert.Equal(HttpStatusCode.OK, get.StatusCode);
 
-            var list = await client.GetFromJsonAsync<ProjectListResponse>("/projects?page=1&pageSize=10");
+            var list = await client.GetFromJsonAsync<ProjectListResponse>("/api/projects?page=1&pageSize=10");
             Assert.NotNull(list);
             Assert.Contains(list.Items, project => project.Id == createdProject.Id);
         }

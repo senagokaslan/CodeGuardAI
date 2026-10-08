@@ -43,7 +43,7 @@ public sealed class ReviewFlowTests : IDisposable
         await using var factory = CreateFactory(store, provider);
         using var client = factory.CreateClient();
 
-        using var created = await client.PostAsJsonAsync("/reviews", new CreateReviewRequest
+        using var created = await client.PostAsJsonAsync("/api/reviews", new CreateReviewRequest
         {
             ProjectId = ProjectId,
             Model = "fake-review-model",
@@ -65,8 +65,8 @@ public sealed class ReviewFlowTests : IDisposable
         Assert.Equal(AIModelRunStatus.Succeeded, store.ModelRun.Status);
         Assert.Single(store.Findings);
 
-        var fetched = await client.GetFromJsonAsync<ReviewResponse>($"/reviews/{body.Id}");
-        var history = await client.GetFromJsonAsync<ReviewHistoryResponse>($"/projects/{ProjectId}/reviews");
+        var fetched = await client.GetFromJsonAsync<ReviewResponse>($"/api/reviews/{body.Id}");
+        var history = await client.GetFromJsonAsync<ReviewHistoryResponse>($"/api/projects/{ProjectId}/reviews");
         Assert.Equal(body.Id, fetched?.Id);
         Assert.Equal(body.Id, Assert.Single(history!.Items).Id);
     }
@@ -83,7 +83,7 @@ public sealed class ReviewFlowTests : IDisposable
         await using var factory = CreateFactory(store, provider);
         using var client = factory.CreateClient();
 
-        using var response = await client.PostAsJsonAsync("/reviews", new CreateReviewRequest
+        using var response = await client.PostAsJsonAsync("/api/reviews", new CreateReviewRequest
         {
             ProjectId = ProjectId,
             Model = "fake-review-model",

@@ -2,13 +2,17 @@ using System.ComponentModel.DataAnnotations;
 using CodeGuardAI.Api.Contracts.Projects;
 using CodeGuardAI.Api.Errors;
 using CodeGuardAI.Application.Projects;
+using CodeGuardAI.Application.Repositories;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CodeGuardAI.Api.Controllers;
 
 [ApiController]
+[Route("api/projects")]
 [Route("projects")]
-public sealed class ProjectsController(IProjectService projectService) : ControllerBase
+public sealed class ProjectsController(
+    IProjectService projectService,
+    IRepositoryScanner scanner) : ControllerBase
 {
     [HttpPost]
     [ProducesResponseType<ProjectResponse>(StatusCodes.Status201Created)]
@@ -28,7 +32,7 @@ public sealed class ProjectsController(IProjectService projectService) : Control
         }
 
         var response = ToResponse(result.Value);
-        return CreatedAtAction(nameof(GetById), new { id = response.Id }, response);
+        return Created($"/api/projects/{response.Id}", response);
     }
 
     [HttpGet("{id:guid}")]
@@ -62,6 +66,40 @@ public sealed class ProjectsController(IProjectService projectService) : Control
             result.Value.Items.Select(ToResponse).ToArray(),
             result.Value.Page,
             result.Value.PageSize));
+    }
+
+    [HttpPost("{id:guid}/scan")]
+    [ProducesResponseType<ProjectScanResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ProjectScanResponse>> Scan(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        var project = await projectService.GetByIdAsync(id, cancellationToken);
+        if (project.IsFailure)
+        {
+            return ResultErrorMapper.ToActionResult(project.Error, HttpContext);
+        }
+
+        var scan = await scanner.ScanAsync(project.Value.RepositoryPath, cancellationToken);
+        if (scan.IsFailure)
+        {
+            return ResultErrorMapper.ToActionResult(scan.Error, HttpContext);
+        }
+
+        return Ok(new ProjectScanResponse(
+            project.Value.Id,
+            scan.Value.IncludedFileCount,
+            scan.Value.Entries.Count(entry => !entry.IsIncluded),
+            scan.Value.IncludedBytes,
+            scan.Value.Entries.Select(entry => new ProjectScanEntryResponse(
+                entry.RelativePath,
+                entry.SizeBytes,
+                entry.Language.ToString(),
+                entry.Kind.ToString(),
+                entry.SkipReason.ToString(),
+                entry.IsIncluded)).ToArray()));
     }
 
     private static ProjectResponse ToResponse(ProjectReadModel project)

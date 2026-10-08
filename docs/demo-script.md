@@ -28,9 +28,15 @@ Ana sayfada repository path'in server-local olduğunu ve secret gösterilmediği
 
 Beklenen: duplicate normalized path ikinci kez oluşturulursa okunabilir `409` mesajı gelir.
 
-## 1:20-2:40 — Bounded review
+## 1:20-1:50 — Root-bound scan
 
-1. Model ve max finding alanlarını göster.
+1. `Scan repository` butonuna bas.
+2. Included/skipped/byte özetini ve skip reason dağılımını göster.
+3. Scan isteğinin browser'dan path almadığını; seçili Project'in normalize edilmiş server-local root'unu kullandığını belirt.
+
+## 1:50-2:50 — Bounded review
+
+1. Doğrulanmış demo modeli `gemini-3.5-flash-lite` ve max finding alanlarını göster.
 2. Run review'e bas.
 3. Progress/cancel durumunu göster.
 4. Tamamlandığında included files, skipped entries, included bytes ve finding sayısını açıkla.
@@ -39,15 +45,16 @@ Beklenen: bulgular repository-relative file ve geçerli line aralığı taşır;
 
 Provider geçici olarak erişilemiyorsa hata state'ini göster; sonucu uydurma veya completed gibi sunma.
 
-## 2:40-3:30 — Filtreler ve failure contract
+## 2:50-3:35 — History, filtreler ve failure contract
 
-1. Severity ve category filtrelerini değiştir.
-2. Eşleşmeyen kombinasyonda empty state'i göster.
-3. Bir finding kartında file/line, reason, suggestion ve confidence alanlarını göster.
+1. Review history'den önceki bir run'ı seçip persisted sonucun yeniden açıldığını göster.
+2. Severity ve category filtrelerini değiştir.
+3. Eşleşmeyen kombinasyonda empty state'i göster.
+4. Bir finding kartında file/line, reason, suggestion ve confidence alanlarını göster.
 
 API hatalarının raw exception yerine HTTP status, açıklama ve stable structured code olarak gösterildiğini belirt.
 
-## 3:30-4:20 — Explicit test önerisi
+## 3:35-4:20 — Explicit test önerisi
 
 1. Bir veya daha fazla finding seç.
 2. `Generate tests` butonunun ancak seçimden sonra aktif olduğunu göster.

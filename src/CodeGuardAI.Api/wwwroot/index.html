@@ -76,12 +76,13 @@
           <form id="review-form" class="review-form">
             <div class="field grow">
               <label for="review-model">Gemini model</label>
-              <input id="review-model" name="model" maxlength="200" autocomplete="off" required placeholder="Configured model name">
+              <input id="review-model" name="model" maxlength="200" autocomplete="off" required value="gemini-3.5-flash-lite" placeholder="Configured model name">
             </div>
             <div class="field compact">
               <label for="max-findings">Max findings</label>
               <input id="max-findings" name="maxFindings" type="number" min="1" max="500" value="100" required>
             </div>
+            <button id="scan-project" class="button ghost" type="button" disabled>Scan repository</button>
             <button id="start-review" class="button primary" type="submit" disabled>Run review</button>
             <button id="cancel-review" class="button ghost" type="button" hidden>Cancel request</button>
           </form>
@@ -97,6 +98,16 @@
             <div><span id="included-bytes">0 B</span><small>Included bytes</small></div>
             <div><span id="finding-count">0</span><small>Findings</small></div>
           </div>
+          <p id="scan-details" class="scan-details" aria-live="polite" hidden></p>
+
+          <section class="history-block" aria-labelledby="history-title">
+            <div class="history-heading">
+              <h3 id="history-title">Review history</h3>
+              <span>Newest first</span>
+            </div>
+            <div id="history-state" class="inline-state">Select a project to load previous reviews.</div>
+            <div id="history-list" class="history-list" aria-label="Previous reviews"></div>
+          </section>
         </section>
 
         <section class="panel findings-panel" aria-labelledby="findings-title">
