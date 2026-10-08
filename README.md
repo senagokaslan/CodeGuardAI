@@ -161,7 +161,7 @@ Tehdit modeli ve kalan riskler için [güvenlik belgesine](docs/security.md) bak
 - [x] Offline Release build/test yeşil ve database test sınırı açık.
 - [x] Repository secret taraması temiz.
 - [ ] Geçerli bir Gemini API key ile başarılı review/test önerisi demosu ve sonuç ekranları yeniden çekilecek; mevcut local key provider tarafından `API_KEY_INVALID` olarak reddedildi.
-- [ ] GitHub hosted CI run yeşil olarak doğrulanacak; ilk run'ın test adımı teşhis için unit/eval ve API/integration adımlarına ayrıldı.
+- [x] [GitHub hosted CI run](https://github.com/senagokaslan/CodeGuardAI/actions/runs/37807822247) secretsiz restore, build, unit/eval ve API/integration adımlarıyla yeşil doğrulandı.
 
 ## Dokümantasyon haritası
 
