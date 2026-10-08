@@ -48,6 +48,22 @@ Allowlist/denylist ve byte limitlerinden geçen repository context'i Gemini'ye g
 
 Prompt içeriği, repository içeriği ve API key loglanmaz. Loglanan metrikler kimlikler, model/prompt sürümü, süre, karakter sayıları, finding sayısı ve stable error type ile sınırlıdır.
 
+## Planlanan Docs Agent güvenlik sözleşmesi
+
+> **Durum:** ADR-004 ile kabul edilmiş tasarım kuralıdır; Docs Agent implementasyonu henüz mevcut değildir.
+
+- Docs Agent yalnız completed `ReviewRun`, persisted grounded finding'ler ve varsa persisted test önerilerini kullanır.
+- Repository yeniden taranmaz; root path veya source content Docs Agent/provider girdisine eklenmez.
+- Request repository path, output path, raw prompt veya Markdown şablonu kabul etmez.
+- Provider raw Markdown üretmez. Structured cevap persisted finding/test kimliklerine göre ground edilir; canonical severity, category, file/line, reason, suggestion ve test hedefleri server-side renderer'dan gelir.
+- Rapor PostgreSQL'e kaydedilir ve API ile okunur; repository'ye dosya yazma, overwrite veya patch yetkisi yoktur.
+- Prompt, provider response, Markdown raporu ve finding/test metinleri loglanmaz. Loglar yalnız kimlik, sürüm, süre, bounded count/character metrics ve stable error code taşır.
+- Bir review için tek başarılı rapor database constraint ile korunur; duplicate concurrent istek deterministic conflict olur.
+- Kısmi veya grounding'den geçmeyen çıktı rapor olarak persist edilmez. Cancellation provider/persistence sınırlarına taşınır.
+- Docs Agent Review Agent veya Test Agent çağırmaz; agent chain ve recursive loop oluşturmaz.
+
+Bu kontroller sonraki implementasyon aşamalarının acceptance kriteridir. Kod ve test kanıtı oluşmadan tamamlanmış güvenlik özelliği olarak değerlendirilmez.
+
 ## Error, cancellation ve recovery
 
 - HTTP yüzeyi expected failure'ları stable code içeren `ProblemDetails` olarak döndürür.

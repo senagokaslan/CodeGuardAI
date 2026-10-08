@@ -1,6 +1,6 @@
 # Mimari
 
-Bu belge, production project reference'ları, EF mapping'leri, workflow'lar ve MCP adapter'larıyla karşılaştırılmış güncel mimariyi gösterir. Karar gerekçeleri [ADR-001](adr/ADR-001-modular-monolith.md) ve [ADR-003](adr/ADR-003-mcp-host.md) içinde tutulur.
+Bu belge, production project reference'ları, EF mapping'leri, workflow'lar ve MCP adapter'larıyla karşılaştırılmış güncel mimariyi gösterir. Karar gerekçeleri [ADR-001](adr/ADR-001-modular-monolith.md), [ADR-003](adr/ADR-003-mcp-host.md) ve planlanan Docs Agent için [ADR-004](adr/ADR-004-docs-agent.md) içinde tutulur.
 
 ## Katmanlar ve bağımlılık yönü
 
@@ -144,6 +144,40 @@ sequenceDiagram
 
 Review adımları sabittir; model yeni workflow adımı üretemez ve agent başka agent çağırmaz. Cancellation scanner/provider/tool zincirine taşınır; başlamış review iptalinde terminal `Failed/Cancelled` kaydı request token'dan bağımsız persist edilir. Test önerisi aynı review için ayrı kullanıcı aksiyonudur ve repository'yi değiştirmez.
 
+## Planlanan Docs Agent sınırı
+
+> **Durum:** Mimari karar ve public contract kabul edildi; kod, migration, DI ve endpoint implementasyonu henüz yoktur.
+
+Docs Agent, Review veya Test Agent'ı çağıran bir üst agent olmayacaktır. Yalnız completed review'ın PostgreSQL'de saklanan finding'lerini ve varsa test önerilerini okuyacaktır.
+
+```mermaid
+flowchart LR
+    User[Explicit user action] -->|POST documentation| Api[Documentation API]
+    Api --> DocsWorkflow[IDocsOrchestrator]
+    DocsWorkflow --> Store[IDocsWorkflowStore]
+    Store --> Review[(Completed ReviewRun)]
+    Store --> Findings[(Grounded Findings)]
+    Store --> Tests[(Optional TestCases)]
+    DocsWorkflow --> DocsAgent[IDocsAgent]
+    DocsAgent --> Provider[ILLMProvider]
+    Provider --> Structured[Structured JSON]
+    Structured --> Grounding[Finding/Test ID grounding]
+    Grounding --> Renderer[Deterministic Markdown renderer]
+    Renderer --> Report[(PostgreSQL documentation report)]
+```
+
+Planlanan contract:
+
+- `POST /api/reviews/{reviewId}/documentation` bir completed review için tek rapor üretir.
+- `GET /api/reviews/{reviewId}/documentation` persisted Markdown raporunu görüntüler.
+- İstemci repository root, source content, output path veya raw prompt göndermez.
+- Markdown repository'ye yazılmaz; yalnız PostgreSQL ve API response içinde tutulur.
+- Provider'ın serbest metni doğrudan saklanmaz. Structured alanlar persisted finding/test ID'lerine ground edilir; severity, category, file/line, reason, suggestion ve test hedefleri canonical kayıtlardan render edilir.
+- Bir review için tek başarılı rapor PostgreSQL unique constraint ile korunur; failed deneme retry'ı engellemez.
+- Docs workflow bounded ve cancellation-aware olur; Review/Test workflow'larının durumunu değiştirmez.
+
+Bu bölüm gelecekteki uygulama sınırını gösterir; mevcut ER diyagramına documentation tablosu, mevcut DI listesine Docs servisleri veya çalışan endpoint listesine documentation route'u eklenmiş değildir.
+
 ## MCP tool zinciri
 
 ```mermaid
@@ -174,3 +208,4 @@ MCP input'u root path, shell command, working directory, executable, timeout vey
 - Gemini transport retry'sı orchestrator adım bütçesinden ayrıdır.
 - Log scope `CorrelationId`, `ReviewRunId` ve `ProjectId` taşır; prompt, secret ve repository içeriği taşımaz.
 - CI dış servis kullanmadan Application/API sözleşmesini doğrular; gerçek PostgreSQL davranışı local-only testtir.
+- Planlanan Docs Agent'ın public/failure/idempotency sözleşmesi ADR-004 ile sabittir; implementasyon tamamlanana kadar çalışan özellik olarak gösterilmez.
