@@ -8,7 +8,7 @@
 2. Repository kökündeki `global.json` ile aynı .NET SDK sürümü olan `10.0.103` kurulur.
 3. `dotnet restore CodeGuardAI.sln` bağımlılıkları geri yükler.
 4. `dotnet build CodeGuardAI.sln --configuration Release --no-restore` restore çıktısını yeniden kullanarak derler.
-5. `dotnet test CodeGuardAI.sln --configuration Release --no-build --filter "Category!=Database"` derlenmiş çıktıda offline suite'i çalıştırır.
+5. Unit/eval ve API/integration projeleri, derlenmiş çıktıda ayrı `dotnet test --no-build --filter "Category!=Database"` adımlarıyla çalışır. Ayrı adımlar kırılan test sınırını GitHub job özetinde görünür tutar.
 
 Adımların hiçbirinde `continue-on-error` yoktur. Restore, build veya test sıfır dışı exit code döndürürse job ve workflow başarısız olur; sonraki adım çalışmaz. GitHub job cancellation, çalışan `dotnet` sürecini sonlandırır. Job için 15 dakikalık üst sınır vardır.
 
@@ -23,7 +23,8 @@ CI ile aynı doğrulamayı yerelde çalıştırmak için:
 ```powershell
 dotnet restore CodeGuardAI.sln
 dotnet build CodeGuardAI.sln --configuration Release --no-restore
-dotnet test CodeGuardAI.sln --configuration Release --no-build --filter "Category!=Database"
+dotnet test tests/CodeGuardAI.UnitTests --configuration Release --no-build --filter "Category!=Database"
+dotnet test tests/CodeGuardAI.IntegrationTests --configuration Release --no-build --filter "Category!=Database"
 ```
 
 Bu komut Unit, API/integration, fake LLM ve `Category=Eval` testlerini kapsar. `Category=Database` dışındaki testlerin dış servise veya geliştirici secret'ına ihtiyaç duymaması gerekir.

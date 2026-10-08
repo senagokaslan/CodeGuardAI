@@ -32,5 +32,8 @@ jobs:
       - name: Build
         run: dotnet build CodeGuardAI.sln --configuration Release --no-restore
 
-      - name: Run offline tests
-        run: dotnet test CodeGuardAI.sln --configuration Release --no-build --filter "Category!=Database"
+      - name: Run unit and eval tests
+        run: dotnet test tests/CodeGuardAI.UnitTests --configuration Release --no-build --filter "Category!=Database"
+
+      - name: Run offline API tests
+        run: dotnet test tests/CodeGuardAI.IntegrationTests --configuration Release --no-build --filter "Category!=Database"
