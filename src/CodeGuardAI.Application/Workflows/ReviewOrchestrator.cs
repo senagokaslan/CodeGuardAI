@@ -3,6 +3,7 @@ using System.Text.Json;
 using CodeGuardAI.Application.Agents;
 using CodeGuardAI.Application.Common;
 using CodeGuardAI.Application.Context;
+using CodeGuardAI.Application.Observability;
 using CodeGuardAI.Application.Prompts;
 using CodeGuardAI.Application.Repositories;
 using CodeGuardAI.Domain.Observability;
@@ -126,6 +127,7 @@ public sealed class ReviewOrchestrator(
             ["ProjectId"] = project.Id
         });
         var stateMachine = new ReviewWorkflowStateMachine();
+        var workflowStopwatch = Stopwatch.StartNew();
         var created = await store.TryCreatePendingAsync(
             reviewRun,
             startedAtUtc - safetyOptions.StaleReviewTimeout,
@@ -137,6 +139,7 @@ public sealed class ReviewOrchestrator(
         }
 
         stateMachine.MoveTo(ReviewWorkflowStage.PendingPersisted);
+        ReviewWorkflowLog.Started(logger, CreateMetrics(reviewRun, workflowStopwatch));
 
         try
         {
@@ -147,7 +150,13 @@ public sealed class ReviewOrchestrator(
             var scanResult = await scanner.ScanAsync(project.NormalizedRootPath, cancellationToken);
             if (scanResult.IsFailure)
             {
-                return await FailAsync(reviewRun, stateMachine, "ScanFailed", null, cancellationToken);
+                return await FailAsync(
+                    reviewRun,
+                    stateMachine,
+                    workflowStopwatch,
+                    "ScanFailed",
+                    null,
+                    cancellationToken);
             }
             stateMachine.MoveTo(ReviewWorkflowStage.RepositoryScanned);
 
@@ -157,7 +166,13 @@ public sealed class ReviewOrchestrator(
                 cancellationToken);
             if (contextResult.IsFailure)
             {
-                return await FailAsync(reviewRun, stateMachine, "ContextFailed", null, cancellationToken);
+                return await FailAsync(
+                    reviewRun,
+                    stateMachine,
+                    workflowStopwatch,
+                    "ContextFailed",
+                    null,
+                    cancellationToken);
             }
             stateMachine.MoveTo(ReviewWorkflowStage.ContextBuilt);
 
@@ -180,6 +195,7 @@ public sealed class ReviewOrchestrator(
                 return await FailAsync(
                     reviewRun,
                     stateMachine,
+                    workflowStopwatch,
                     MapAgentFailure(agentResult.Error.Code),
                     failedModelRun,
                     cancellationToken);
@@ -204,6 +220,13 @@ public sealed class ReviewOrchestrator(
                 agentResult.Value.Findings,
                 modelRun,
                 cancellationToken);
+            ReviewWorkflowLog.Completed(
+                logger,
+                CreateMetrics(
+                    reviewRun,
+                    workflowStopwatch,
+                    agentResult.Value.Findings.Count,
+                    agentResult.Value.RejectedFindings.Count));
             return Result.Success((await store.GetAsync(reviewRun.Id, cancellationToken))!);
         }
         catch (WorkflowStepLimitExceededException exception)
@@ -214,18 +237,30 @@ public sealed class ReviewOrchestrator(
                 exception.Step);
             reviewRun.TryFail("StepLimitExceeded", timeProvider.GetUtcNow());
             await store.FailAsync(reviewRun, null, CancellationToken.None);
+            ReviewWorkflowLog.Failed(
+                logger,
+                CreateMetrics(reviewRun, workflowStopwatch),
+                "StepLimitExceeded");
             return Result.Failure<ReviewReadModel>(ReviewWorkflowErrors.ExecutionFailed);
         }
         catch (OperationCanceledException)
         {
             reviewRun.TryFail(ReviewRun.CancelledErrorCode, timeProvider.GetUtcNow());
             await store.FailAsync(reviewRun, null, CancellationToken.None);
+            ReviewWorkflowLog.Failed(
+                logger,
+                CreateMetrics(reviewRun, workflowStopwatch),
+                ReviewRun.CancelledErrorCode);
             throw;
         }
         catch
         {
             reviewRun.TryFail("Unhandled", timeProvider.GetUtcNow());
             await store.FailAsync(reviewRun, null, CancellationToken.None);
+            ReviewWorkflowLog.Failed(
+                logger,
+                CreateMetrics(reviewRun, workflowStopwatch),
+                "Unhandled");
             throw;
         }
     }
@@ -257,6 +292,7 @@ public sealed class ReviewOrchestrator(
     private async Task<Result<ReviewReadModel>> FailAsync(
         ReviewRun reviewRun,
         ReviewWorkflowStateMachine stateMachine,
+        Stopwatch workflowStopwatch,
         string errorCode,
         AIModelRun? modelRun,
         CancellationToken cancellationToken)
@@ -264,8 +300,26 @@ public sealed class ReviewOrchestrator(
         reviewRun.TryFail(errorCode, timeProvider.GetUtcNow());
         stateMachine.MoveTo(ReviewWorkflowStage.Terminal);
         await store.FailAsync(reviewRun, modelRun, cancellationToken);
+        ReviewWorkflowLog.Failed(
+            logger,
+            CreateMetrics(reviewRun, workflowStopwatch),
+            errorCode);
         return Result.Failure<ReviewReadModel>(ReviewWorkflowErrors.ExecutionFailed);
     }
+
+    private static ReviewRunMetrics CreateMetrics(
+        ReviewRun reviewRun,
+        Stopwatch stopwatch,
+        int findingCount = 0,
+        int rejectedFindingCount = 0) =>
+        new(
+            reviewRun.Id,
+            reviewRun.ProjectId,
+            reviewRun.ModelName,
+            reviewRun.PromptVersion,
+            (long)Math.Max(0, stopwatch.Elapsed.TotalMilliseconds),
+            findingCount,
+            rejectedFindingCount);
 
     private AIModelRun CreateFailedModelRun(
         ReviewRun reviewRun,

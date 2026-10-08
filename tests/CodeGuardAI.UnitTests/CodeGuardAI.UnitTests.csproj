@@ -21,4 +21,10 @@
     <ProjectReference Include="..\..\src\CodeGuardAI.McpHost\CodeGuardAI.McpHost.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="..\Fixtures\Evals\*.cs"
+          Link="Fixtures\Evals\%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
