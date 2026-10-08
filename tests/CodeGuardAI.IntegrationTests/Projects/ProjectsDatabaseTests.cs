@@ -13,6 +13,7 @@ using Xunit;
 namespace CodeGuardAI.IntegrationTests.Projects;
 
 [Trait("Category", "Database")]
+[Collection("Database")]
 public sealed class ProjectsDatabaseTests
 {
     private const string ConnectionStringVariable = "CODEGUARD_TEST_DATABASE_CONNECTION_STRING";

@@ -1,3 +1,4 @@
+using CodeGuardAI.Domain.Documentation;
 using CodeGuardAI.Domain.Observability;
 using CodeGuardAI.Domain.Projects;
 using CodeGuardAI.Domain.Reviews;
@@ -19,6 +20,8 @@ public sealed class CodeGuardDbContext(DbContextOptions<CodeGuardDbContext> opti
     public DbSet<AIModelRun> AIModelRuns => Set<AIModelRun>();
 
     public DbSet<ToolExecution> ToolExecutions => Set<ToolExecution>();
+
+    public DbSet<DocumentationReport> DocumentationReports => Set<DocumentationReport>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

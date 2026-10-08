@@ -1,4 +1,5 @@
 using CodeGuardAI.Application.Options;
+using CodeGuardAI.Domain.Documentation;
 using CodeGuardAI.Domain.Observability;
 using CodeGuardAI.Domain.Projects;
 using CodeGuardAI.Domain.Reviews;
@@ -29,7 +30,8 @@ public sealed class CodeGuardDbContextModelTests
             [typeof(Finding)] = "findings",
             [typeof(TestCase)] = "test_cases",
             [typeof(AIModelRun)] = "ai_model_runs",
-            [typeof(ToolExecution)] = "tool_executions"
+            [typeof(ToolExecution)] = "tool_executions",
+            [typeof(DocumentationReport)] = "documentation_reports"
         };
 
         foreach (var (entityType, tableName) in expected)
@@ -68,6 +70,38 @@ public sealed class CodeGuardDbContextModelTests
         AssertCascadeForeignKey<TestCase, ReviewRun>(model, nameof(TestCase.ReviewRunId), required: true);
         AssertCascadeForeignKey<AIModelRun, ReviewRun>(model, nameof(AIModelRun.ReviewRunId), required: true);
         AssertCascadeForeignKey<ToolExecution, ReviewRun>(model, nameof(ToolExecution.ReviewRunId), required: false);
+        AssertCascadeForeignKey<DocumentationReport, ReviewRun>(
+            model,
+            nameof(DocumentationReport.ReviewRunId),
+            required: true);
+        AssertCascadeForeignKey<DocumentationReport, AIModelRun>(
+            model,
+            nameof(DocumentationReport.ModelRunId),
+            required: true);
+    }
+
+    [Fact]
+    public void Documentation_report_has_bounded_content_and_unique_review_index()
+    {
+        using var context = CreateContext();
+        var report = RequiredEntity<DocumentationReport>(context.Model);
+        var reviewRunId = report.FindProperty(nameof(DocumentationReport.ReviewRunId))!;
+        var modelRunId = report.FindProperty(nameof(DocumentationReport.ModelRunId))!;
+        var title = report.FindProperty(nameof(DocumentationReport.Title))!;
+        var markdown = report.FindProperty(nameof(DocumentationReport.MarkdownContent))!;
+        var reviewIndex = Assert.Single(report.GetIndexes(), candidate =>
+            candidate.Properties.Count == 1 && candidate.Properties[0] == reviewRunId);
+        var modelIndex = Assert.Single(report.GetIndexes(), candidate =>
+            candidate.Properties.Count == 1 && candidate.Properties[0] == modelRunId);
+
+        Assert.True(reviewIndex.IsUnique);
+        Assert.Equal("ux_documentation_reports_review_run_id", reviewIndex.GetDatabaseName());
+        Assert.False(modelIndex.IsUnique);
+        Assert.Equal("ix_documentation_reports_model_run_id", modelIndex.GetDatabaseName());
+        Assert.Equal(DocumentationReport.MaxTitleLength, title.GetMaxLength());
+        Assert.Equal(DocumentationReport.MaxMarkdownContentLength, markdown.GetMaxLength());
+        Assert.False(title.IsNullable);
+        Assert.False(markdown.IsNullable);
     }
 
     [Fact]
@@ -124,9 +158,10 @@ public sealed class CodeGuardDbContextModelTests
         var script = context.GetService<IMigrator>().GenerateScript(
             options: MigrationsSqlGenerationOptions.Idempotent);
 
-        Assert.Equal(2, migrations.Length);
+        Assert.Equal(3, migrations.Length);
         Assert.EndsWith("_InitialCreate", migrations[0], StringComparison.Ordinal);
         Assert.EndsWith("_WorkflowSafetyConcurrency", migrations[1], StringComparison.Ordinal);
+        Assert.EndsWith("_AddDocumentationReport", migrations[2], StringComparison.Ordinal);
 
         var expectedTables = new[]
         {
@@ -135,7 +170,8 @@ public sealed class CodeGuardDbContextModelTests
             "findings",
             "test_cases",
             "ai_model_runs",
-            "tool_executions"
+            "tool_executions",
+            "documentation_reports"
         };
         foreach (var table in expectedTables)
         {
@@ -145,7 +181,10 @@ public sealed class CodeGuardDbContextModelTests
         Assert.Contains("ux_projects_normalized_root_path", script, StringComparison.Ordinal);
         Assert.Contains("ux_review_runs_active_project", script, StringComparison.Ordinal);
         Assert.Contains("ux_ai_model_runs_successful_test_generation", script, StringComparison.Ordinal);
-        Assert.Equal(5, script.Split("ON DELETE CASCADE", StringSplitOptions.None).Length - 1);
+        Assert.Contains("ux_documentation_reports_review_run_id", script, StringComparison.Ordinal);
+        Assert.Contains("fk_documentation_reports_review_runs_review_run_id", script, StringComparison.Ordinal);
+        Assert.Contains("fk_documentation_reports_ai_model_runs_model_run_id", script, StringComparison.Ordinal);
+        Assert.Equal(7, script.Split("ON DELETE CASCADE", StringSplitOptions.None).Length - 1);
         Assert.Contains("character varying(32)", script, StringComparison.Ordinal);
         Assert.Contains("character varying(64)", script, StringComparison.Ordinal);
     }

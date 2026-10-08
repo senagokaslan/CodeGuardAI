@@ -61,6 +61,26 @@ public sealed class EntityInvariantTests
             CreatedAtUtc));
     }
 
+    [Fact]
+    public void AIModelRun_WithDocumentationPurpose_IsValid()
+    {
+        var modelRun = AIModelRun.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            AIModelRunPurpose.Documentation,
+            "Google",
+            "gemini",
+            "docs-v1",
+            10,
+            100,
+            50,
+            AIModelRunStatus.Succeeded,
+            null,
+            CreatedAtUtc);
+
+        Assert.Equal(AIModelRunPurpose.Documentation, modelRun.Purpose);
+    }
+
     [Theory]
     [InlineData(ToolExecutionStatus.Succeeded, "ToolError")]
     [InlineData(ToolExecutionStatus.Failed, null)]
