@@ -59,6 +59,9 @@ public sealed class ProjectReferenceTests
             .Descendants("ProjectReference")
             .Select(reference => reference.Attribute("Include")?.Value
                 ?? throw new InvalidOperationException($"ProjectReference without Include in {projectPath}."))
+            .Select(reference => reference
+                .Replace('\\', Path.DirectorySeparatorChar)
+                .Replace('/', Path.DirectorySeparatorChar))
             .Select(reference => Path.GetFullPath(Path.Combine(projectDirectory, reference)))
             .Select(reference => Path.GetFileNameWithoutExtension(reference)
                 ?? throw new InvalidOperationException($"Referenced project name could not be resolved: {reference}"))

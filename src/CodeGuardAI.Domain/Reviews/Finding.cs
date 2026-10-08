@@ -61,7 +61,7 @@ public sealed class Finding
         DateTimeOffset createdAtUtc)
     {
         var validatedPath = DomainGuard.Required(filePath, nameof(filePath));
-        if (Path.IsPathRooted(validatedPath))
+        if (IsAbsolutePath(validatedPath))
         {
             throw new ArgumentException("The finding file path must be repository-relative.", nameof(filePath));
         }
@@ -94,5 +94,19 @@ public sealed class Finding
             DomainGuard.Required(suggestion, nameof(suggestion)),
             confidence,
             DomainGuard.Utc(createdAtUtc, nameof(createdAtUtc)));
+    }
+
+    private static bool IsAbsolutePath(string path)
+    {
+        if (Path.IsPathRooted(path))
+        {
+            return true;
+        }
+
+        // Path.IsPathRooted follows the host OS. Findings can contain paths from
+        // repositories scanned on another OS, so reject Windows rooted forms on
+        // Unix as well.
+        return path.Length >= 2 && char.IsAsciiLetter(path[0]) && path[1] == ':'
+            || path.StartsWith('\\');
     }
 }

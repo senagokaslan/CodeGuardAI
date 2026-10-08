@@ -28,10 +28,14 @@ public sealed class FindingTests
         Assert.Throws<ArgumentOutOfRangeException>(() => CreateFinding(startLine: 8, endLine: 7));
     }
 
-    [Fact]
-    public void Create_WithAbsoluteFilePath_Throws()
+    [Theory]
+    [InlineData("C:/repo/Program.cs")]
+    [InlineData("C:\\repo\\Program.cs")]
+    [InlineData("/repo/Program.cs")]
+    [InlineData("\\\\server\\share\\Program.cs")]
+    public void Create_WithAbsoluteFilePath_Throws(string filePath)
     {
-        Assert.Throws<ArgumentException>(() => CreateFinding(filePath: "C:/repo/Program.cs"));
+        Assert.Throws<ArgumentException>(() => CreateFinding(filePath: filePath));
     }
 
     [Fact]
