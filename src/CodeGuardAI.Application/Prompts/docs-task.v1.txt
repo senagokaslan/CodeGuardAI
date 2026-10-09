@@ -1,0 +1,18 @@
+Create the structured documentation report for this completed review.
+
+<documentation_input>
+{{DOCUMENTATION_INPUT}}
+</documentation_input>
+
+Return exactly this JSON shape:
+{
+  "title": "short report title",
+  "executiveSummary": "bounded summary",
+  "findingSections": [
+    { "findingId": "persisted-guid", "impact": "bounded impact explanation" }
+  ],
+  "testCaseSections": [
+    { "testCaseId": "persisted-guid", "coverage": "bounded coverage explanation" }
+  ],
+  "conclusion": "bounded conclusion"
+}

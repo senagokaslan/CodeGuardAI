@@ -42,6 +42,13 @@ public sealed class FakeLLMProvider : ILLMProvider
         return ExecuteAsync(request, cancellationToken);
     }
 
+    public Task<LLMProviderResult> GenerateDocumentationAsync(
+        LLMRequest request,
+        CancellationToken cancellationToken)
+    {
+        return ExecuteAsync(request, cancellationToken);
+    }
+
     private Task<LLMProviderResult> ExecuteAsync(
         LLMRequest request,
         CancellationToken cancellationToken)
