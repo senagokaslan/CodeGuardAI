@@ -1,4 +1,5 @@
 using CodeGuardAI.Application.Agents;
+using CodeGuardAI.Application.Documentation;
 using CodeGuardAI.Application.Options;
 using CodeGuardAI.Application.Projects;
 using CodeGuardAI.Application.Repositories;
@@ -62,10 +63,14 @@ internal static class DependencyInjection
             .GetRequiredService<Microsoft.Extensions.Options.IOptions<WorkflowSafetyOptions>>()
             .Value);
         services.AddSingleton<FindingGroundingValidator>();
+        services.AddSingleton<DocumentationGroundingValidator>();
+        services.AddSingleton<MarkdownReportRenderer>();
         services.AddScoped<IReviewAgent, ReviewAgent>();
         services.AddScoped<ITestAgent, TestAgent>();
+        services.AddScoped<IDocsAgent, DocsAgent>();
         services.AddScoped<IReviewOrchestrator, ReviewOrchestrator>();
         services.AddScoped<ITestOrchestrator, TestOrchestrator>();
+        services.AddScoped<IDocsOrchestrator, DocsOrchestrator>();
         services.AddScoped<IProjectService, ProjectService>();
         return services;
     }

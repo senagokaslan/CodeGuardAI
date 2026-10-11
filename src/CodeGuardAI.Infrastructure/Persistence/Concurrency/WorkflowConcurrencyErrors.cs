@@ -7,6 +7,7 @@ internal static class WorkflowConcurrencyIndexes
 {
     public const string ActiveReviewPerProject = "ux_review_runs_active_project";
     public const string SuccessfulTestGeneration = "ux_ai_model_runs_successful_test_generation";
+    public const string DocumentationReportPerReview = "ux_documentation_reports_review_run_id";
 }
 
 internal static class WorkflowConcurrencyErrors

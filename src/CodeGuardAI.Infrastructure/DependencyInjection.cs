@@ -40,6 +40,7 @@ public static class DependencyInjection
         services.AddScoped<IProjectQueries, EfProjectQueries>();
         services.AddScoped<IReviewWorkflowStore, EfReviewWorkflowStore>();
         services.AddScoped<ITestWorkflowStore, EfTestWorkflowStore>();
+        services.AddScoped<IDocsWorkflowStore, EfDocsWorkflowStore>();
         services.AddScoped<IToolExecutionWriter, EfToolExecutionWriter>();
         services.AddSingleton<IToolAuthorizationPolicy, InternalToolAuthorizationPolicy>();
         services.TryAddSingleton(TimeProvider.System);

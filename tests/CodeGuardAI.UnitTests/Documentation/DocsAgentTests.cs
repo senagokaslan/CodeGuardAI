@@ -28,7 +28,7 @@ public sealed class DocsAgentTests
     }
 
     [Fact]
-    public async Task Completed_review_without_test_suggestions_produces_markdown()
+    public async Task Completed_review_without_test_suggestions_produces_grounded_report()
     {
         var input = CreateInput();
         var finding = Assert.Single(input.Findings);
@@ -41,12 +41,12 @@ public sealed class DocsAgentTests
         Assert.True(result.IsSuccess);
         Assert.Equal(input.ReviewRun.Id, result.Value.ReviewRunId);
         Assert.Equal("docs-v1", result.Value.PromptVersion);
-        Assert.Contains("Severity: High", result.Value.MarkdownContent);
-        Assert.Contains("No persisted test suggestions", result.Value.MarkdownContent);
+        Assert.Equal("Technical report", result.Value.Report.Title);
+        Assert.Empty(result.Value.Report.TestCases);
     }
 
     [Fact]
-    public async Task Prompt_and_report_exclude_suggested_test_source()
+    public async Task Prompt_excludes_suggested_test_source()
     {
         const string sourceSentinel = "SECRET_SOURCE_CODE_SHOULD_NOT_APPEAR";
         var review = CreateReview(ReviewStatus.Completed);
@@ -54,6 +54,7 @@ public sealed class DocsAgentTests
         var testCase = DocumentationGroundingValidatorTests.CreateTestCase(sourceSentinel);
         var input = new DocsAgentInput(
             review,
+            "Example project",
             [finding],
             [testCase],
             new DocsAgentPolicy("docs-model", TimeSpan.FromSeconds(10)));
@@ -66,7 +67,6 @@ public sealed class DocsAgentTests
         Assert.True(result.IsSuccess);
         var invocation = Assert.Single(provider.Invocations);
         Assert.DoesNotContain(sourceSentinel, invocation.Request.UserPrompt);
-        Assert.DoesNotContain(sourceSentinel, result.Value.MarkdownContent);
         Assert.DoesNotContain("repositoryPath", invocation.Request.UserPrompt);
     }
 
@@ -122,6 +122,7 @@ public sealed class DocsAgentTests
         var review = CreateReview(ReviewStatus.Completed);
         var input = new DocsAgentInput(
             review,
+            "Example project",
             [CreateFinding(review.Id)],
             [],
             new DocsAgentPolicy("docs-model", TimeSpan.FromSeconds(10), maxFindings: 0));
@@ -135,7 +136,7 @@ public sealed class DocsAgentTests
     }
 
     private static DocsAgent CreateAgent(ILLMProvider provider) =>
-        new(provider, new DocumentationGroundingValidator(), new MarkdownReportRenderer());
+        new(provider, new DocumentationGroundingValidator());
 
     private static FakeLLMProvider ProviderWithResponse(string content)
     {
@@ -154,6 +155,7 @@ public sealed class DocsAgentTests
         review ??= CreateReview(ReviewStatus.Completed);
         return new DocsAgentInput(
             review,
+            "Example project",
             [CreateFinding(review.Id)],
             [],
             new DocsAgentPolicy("docs-model", TimeSpan.FromSeconds(10)));

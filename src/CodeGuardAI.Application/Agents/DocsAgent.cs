@@ -23,11 +23,13 @@ public sealed record DocsAgentInput
 {
     public DocsAgentInput(
         ReviewRun reviewRun,
+        string projectName,
         IReadOnlyList<Finding> findings,
         IReadOnlyList<TestCase> testCases,
         DocsAgentPolicy policy)
     {
         ArgumentNullException.ThrowIfNull(reviewRun);
+        ArgumentException.ThrowIfNullOrWhiteSpace(projectName);
         ArgumentNullException.ThrowIfNull(findings);
         ArgumentNullException.ThrowIfNull(testCases);
         ArgumentNullException.ThrowIfNull(policy);
@@ -42,12 +44,15 @@ public sealed record DocsAgentInput
         }
 
         ReviewRun = reviewRun;
+        ProjectName = projectName.Trim();
         Findings = findings.ToArray();
         TestCases = testCases.ToArray();
         Policy = policy;
     }
 
     public ReviewRun ReviewRun { get; }
+
+    public string ProjectName { get; }
 
     public IReadOnlyList<Finding> Findings { get; }
 
@@ -125,15 +130,13 @@ public sealed record DocsAgentResult(
     TimeSpan Duration,
     int InputCharacters,
     int OutputCharacters,
-    string Title,
-    string MarkdownContent,
+    GroundedDocumentationReport Report,
     int FindingCount,
     int TestCaseCount);
 
 public sealed class DocsAgent(
     ILLMProvider provider,
-    DocumentationGroundingValidator groundingValidator,
-    MarkdownReportRenderer renderer) : IDocsAgent
+    DocumentationGroundingValidator groundingValidator) : IDocsAgent
 {
     private static readonly JsonSerializerOptions PromptSerializerOptions = new(JsonSerializerDefaults.Web);
 
@@ -198,15 +201,6 @@ public sealed class DocsAgent(
             return Result.Failure<DocsAgentResult>(groundingResult.Error);
         }
 
-        var renderingResult = renderer.Render(
-            groundingResult.Value,
-            input.Policy.MaxReportCharacters,
-            cancellationToken);
-        if (renderingResult.IsFailure)
-        {
-            return Result.Failure<DocsAgentResult>(renderingResult.Error);
-        }
-
         return Result.Success(new DocsAgentResult(
             input.ReviewRun.Id,
             request.Model,
@@ -215,8 +209,7 @@ public sealed class DocsAgent(
             providerResult.Response.Duration,
             request.SystemPrompt.Length + request.UserPrompt.Length,
             providerResult.Response.Content.Length,
-            parseResult.Value.Title,
-            renderingResult.Value,
+            groundingResult.Value,
             input.Findings.Count,
             input.TestCases.Count));
     }
@@ -250,6 +243,7 @@ public sealed class DocsAgent(
         var promptData = new
         {
             reviewRunId = input.ReviewRun.Id,
+            projectName = input.ProjectName,
             findings = input.Findings
                 .OrderBy(finding => finding.Id)
                 .Select(finding => new

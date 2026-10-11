@@ -1,4 +1,7 @@
+using CodeGuardAI.Application.Agents;
+using CodeGuardAI.Application.Documentation;
 using CodeGuardAI.Application.Options;
+using CodeGuardAI.Application.Workflows;
 using CodeGuardAI.Infrastructure.LLM;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -22,6 +25,28 @@ public sealed class ConfigurationTests
 
         Assert.Equal(IntegrationTestConfiguration.FakeConnectionString, database.ConnectionString);
         Assert.Equal(IntegrationTestConfiguration.FakeGeminiApiKey, gemini.ApiKey);
+    }
+
+    [Fact]
+    public void Documentation_workflow_services_are_registered_with_expected_lifetimes()
+    {
+        using var factory = CreateFactory();
+        using var firstScope = factory.Services.CreateScope();
+        using var secondScope = factory.Services.CreateScope();
+
+        var firstOrchestrator = firstScope.ServiceProvider.GetRequiredService<IDocsOrchestrator>();
+        var sameOrchestrator = firstScope.ServiceProvider.GetRequiredService<IDocsOrchestrator>();
+        var secondOrchestrator = secondScope.ServiceProvider.GetRequiredService<IDocsOrchestrator>();
+        var firstStore = firstScope.ServiceProvider.GetRequiredService<IDocsWorkflowStore>();
+        var firstAgent = firstScope.ServiceProvider.GetRequiredService<IDocsAgent>();
+        var renderer = firstScope.ServiceProvider.GetRequiredService<MarkdownReportRenderer>();
+        var secondRenderer = secondScope.ServiceProvider.GetRequiredService<MarkdownReportRenderer>();
+
+        Assert.Same(firstOrchestrator, sameOrchestrator);
+        Assert.NotSame(firstOrchestrator, secondOrchestrator);
+        Assert.NotNull(firstStore);
+        Assert.NotNull(firstAgent);
+        Assert.Same(renderer, secondRenderer);
     }
 
     [Fact]
