@@ -174,6 +174,11 @@ public sealed class WorkflowSafetyTests : IDisposable
             LLMRequest request,
             CancellationToken cancellationToken) =>
             throw new NotSupportedException();
+
+        public Task<LLMProviderResult> GenerateDocumentationAsync(
+            LLMRequest request,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
     }
 
     private sealed class CancellingReviewProvider : ILLMProvider
@@ -196,6 +201,11 @@ public sealed class WorkflowSafetyTests : IDisposable
         }
 
         public Task<LLMProviderResult> GenerateTestsAsync(
+            LLMRequest request,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<LLMProviderResult> GenerateDocumentationAsync(
             LLMRequest request,
             CancellationToken cancellationToken) =>
             throw new NotSupportedException();

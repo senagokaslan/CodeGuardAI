@@ -176,6 +176,11 @@ public sealed class ReviewFlowTests : IDisposable
             LLMRequest request,
             CancellationToken cancellationToken) =>
             throw new NotSupportedException("This fake only supports review generation.");
+
+        public Task<LLMProviderResult> GenerateDocumentationAsync(
+            LLMRequest request,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException("This fake only supports review generation.");
     }
 
     private sealed class InMemoryToolExecutionWriter : IToolExecutionWriter

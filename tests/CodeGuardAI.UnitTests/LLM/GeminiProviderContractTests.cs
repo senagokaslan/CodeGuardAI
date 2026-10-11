@@ -13,6 +13,9 @@ namespace CodeGuardAI.UnitTests.LLM.GeminiProvider;
 public sealed class GeminiProviderContractTests
 {
     private const string ValidReviewJson = "{\"findings\":[]}";
+    private const string ValidDocumentationJson = """
+        {"title":"Review report","executiveSummary":"Summary","findingSections":[],"testCaseSections":[],"conclusion":"Conclusion"}
+        """;
 
     [Fact]
     public async Task Success_sends_header_auth_separate_roles_and_structured_output_schema()
@@ -165,6 +168,150 @@ public sealed class GeminiProviderContractTests
         Assert.Equal(1, handler.CallCount);
     }
 
+    [Fact]
+    public async Task Documentation_success_requires_json_mime_type_and_strict_schema()
+    {
+        CapturedRequest? captured = null;
+        var handler = new DelegateHandler(async (request, cancellationToken) =>
+        {
+            captured = await CapturedRequest.CreateAsync(request, cancellationToken);
+            return JsonResponse(CreateEnvelope(ValidDocumentationJson));
+        });
+        var provider = CreateProvider(handler);
+
+        var result = await provider.GenerateDocumentationAsync(
+            CreateDocumentationRequest(),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(ValidDocumentationJson, result.Response.Content);
+        Assert.NotNull(captured);
+        Assert.DoesNotContain("test-api-key", captured.Uri.AbsoluteUri, StringComparison.Ordinal);
+        Assert.Equal("test-api-key", Assert.Single(captured.ApiKeyValues));
+
+        using var body = JsonDocument.Parse(captured.Body);
+        var generationConfig = body.RootElement.GetProperty("generationConfig");
+        Assert.Equal("application/json", generationConfig.GetProperty("responseMimeType").GetString());
+        var schema = generationConfig.GetProperty("responseJsonSchema");
+        Assert.False(schema.GetProperty("additionalProperties").GetBoolean());
+        Assert.Equal(
+            ["title", "executiveSummary", "findingSections", "testCaseSections", "conclusion"],
+            schema.GetProperty("required").EnumerateArray().Select(static item => item.GetString()));
+        var findingSchema = schema.GetProperty("properties")
+            .GetProperty("findingSections")
+            .GetProperty("items");
+        Assert.False(findingSchema.GetProperty("additionalProperties").GetBoolean());
+        Assert.Equal(
+            ["findingId", "impact"],
+            findingSchema.GetProperty("required").EnumerateArray().Select(static item => item.GetString()));
+    }
+
+    [Fact]
+    public async Task Documentation_malformed_response_fails_safely_without_logging_sensitive_content()
+    {
+        const string sensitiveResponse = "MODEL_SECRET_RESPONSE";
+        var handler = new DelegateHandler((_, _) => Task.FromResult(
+            JsonResponse(CreateEnvelope($"{{\"title\":\"{sensitiveResponse}\"}}"))));
+        var providerLogs = new RecordingLogger<GeminiProviderAdapter>();
+        var httpLogs = new RecordingLogger<GeminiHttpClient>();
+        var provider = CreateProvider(handler, providerLogs, httpLogs);
+
+        var result = await provider.GenerateDocumentationAsync(
+            CreateDocumentationRequest(),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(LLMProviderErrorType.InvalidResponse, result.Error.Type);
+        Assert.Equal(1, handler.CallCount);
+        var allLogs = string.Join("\n", providerLogs.Messages.Concat(httpLogs.Messages));
+        Assert.DoesNotContain("test-api-key", allLogs, StringComparison.Ordinal);
+        Assert.DoesNotContain("DOCS_PRIVATE_CONTEXT", allLogs, StringComparison.Ordinal);
+        Assert.DoesNotContain(sensitiveResponse, allLogs, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Documentation_timeout_cancels_http_and_returns_typed_timeout()
+    {
+        var handlerObservedCancellation = false;
+        var handler = new DelegateHandler(async (_, cancellationToken) =>
+        {
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                handlerObservedCancellation = true;
+                throw;
+            }
+
+            throw new InvalidOperationException("Timeout fixture unexpectedly continued.");
+        });
+        var provider = CreateProvider(handler);
+
+        var result = await provider.GenerateDocumentationAsync(
+            CreateDocumentationRequest(TimeSpan.FromMilliseconds(25)),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(LLMProviderErrorType.Timeout, result.Error.Type);
+        Assert.True(handlerObservedCancellation);
+    }
+
+    [Fact]
+    public async Task Documentation_external_cancellation_is_propagated()
+    {
+        var handler = new DelegateHandler(async (_, cancellationToken) =>
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            throw new InvalidOperationException("Cancellation fixture unexpectedly continued.");
+        });
+        var provider = CreateProvider(handler);
+        using var cancellation = new CancellationTokenSource();
+
+        var operation = provider.GenerateDocumentationAsync(
+            CreateDocumentationRequest(),
+            cancellation.Token);
+        await cancellation.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => operation);
+    }
+
+    [Fact]
+    public async Task Documentation_rate_limit_is_bounded_and_typed()
+    {
+        var handler = new DelegateHandler((_, _) => Task.FromResult(
+            new HttpResponseMessage(HttpStatusCode.TooManyRequests)));
+        var provider = CreateProvider(handler);
+
+        var result = await provider.GenerateDocumentationAsync(
+            CreateDocumentationRequest(),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(LLMProviderErrorType.RateLimit, result.Error.Type);
+        Assert.Equal(3, handler.CallCount);
+    }
+
+    [Fact]
+    public async Task Documentation_transient_server_error_is_retried_and_can_recover()
+    {
+        var responses = new Queue<HttpResponseMessage>(
+        [
+            new HttpResponseMessage(HttpStatusCode.ServiceUnavailable),
+            JsonResponse(CreateEnvelope(ValidDocumentationJson))
+        ]);
+        var handler = new DelegateHandler((_, _) => Task.FromResult(responses.Dequeue()));
+        var provider = CreateProvider(handler);
+
+        var result = await provider.GenerateDocumentationAsync(
+            CreateDocumentationRequest(),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(2, handler.CallCount);
+    }
+
     private static GeminiProviderAdapter CreateProvider(
         HttpMessageHandler handler,
         RecordingLogger<GeminiProviderAdapter>? providerLogger = null,
@@ -200,6 +347,16 @@ public sealed class GeminiProviderContractTests
             timeout ?? TimeSpan.FromSeconds(5),
             "System instructions.",
             "Review repository context.");
+    }
+
+    private static LLMRequest CreateDocumentationRequest(TimeSpan? timeout = null)
+    {
+        return new LLMRequest(
+            "gemini-test",
+            "docs-v1",
+            timeout ?? TimeSpan.FromSeconds(5),
+            "Documentation system instructions.",
+            "DOCS_PRIVATE_CONTEXT");
     }
 
     private static HttpResponseMessage JsonResponse(string json)

@@ -178,6 +178,11 @@ public sealed class TestFlowTests : IDisposable
                 """,
                 TimeSpan.FromMilliseconds(12))));
         }
+
+        public Task<LLMProviderResult> GenerateDocumentationAsync(
+            LLMRequest request,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException("This fake only supports test generation.");
     }
 
     private sealed class FakeTestRunner(RecordingExecutionWriter audit) : ITestRunnerTool

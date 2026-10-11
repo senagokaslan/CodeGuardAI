@@ -38,6 +38,17 @@ public sealed class GeminiProvider(
             cancellationToken);
     }
 
+    public async Task<LLMProviderResult> GenerateDocumentationAsync(
+        LLMRequest request,
+        CancellationToken cancellationToken)
+    {
+        return await GenerateAsync(
+            request,
+            GeminiDocumentationSchema.Definition,
+            content => GeminiDocumentationSchema.Parse(content).IsSuccess,
+            cancellationToken);
+    }
+
     private async Task<LLMProviderResult> GenerateAsync(
         LLMRequest request,
         string responseSchema,
