@@ -29,6 +29,23 @@ dotnet test tests/CodeGuardAI.IntegrationTests --configuration Release --no-buil
 
 Bu komut Unit, API/integration, fake LLM ve `Category=Eval` testlerini kapsar. `Category=Database` dışındaki testlerin dış servise veya geliştirici secret'ına ihtiyaç duymaması gerekir.
 
+Docs Agent için offline matris aşağıdaki sınırları kapsar:
+
+- başarılı grounded rapor ve TestCase olmayan review;
+- unknown/duplicate `FindingId` ve `TestCaseId` reddi;
+- malformed JSON, provider timeout/failure ve cancellation;
+- prompt/schema/Markdown output limitleri ve canonical alan kullanımı;
+- ikinci raporda `409` ve gerçek eşzamanlı iki HTTP isteğinde tek başarılı persistence;
+- Development OpenAPI'de documentation GET/POST sözleşmesi;
+- Fake provider çağrısının Review/Test/Documentation operasyon türünü koruması.
+
+Odaklı offline regresyon komutları:
+
+```powershell
+dotnet test CodeGuardAI.sln --configuration Release --no-build --filter "FullyQualifiedName~Documentation|FullyQualifiedName~Docs"
+dotnet test CodeGuardAI.sln --configuration Release --no-build --filter "FullyQualifiedName~ReviewAgent|FullyQualifiedName~TestAgent|FullyQualifiedName~ReviewFlow|FullyQualifiedName~TestFlow"
+```
+
 ## PostgreSQL testleri: local-only
 
 Gerçek ilişkisel davranışı kanıtlayan testler `[Trait("Category", "Database")]` ile ayrılır ve hosted CI'da çalıştırılmaz. Bu testler yalnız geliştiricinin açıkça hazırladığı yerel PostgreSQL test veritabanına karşı koşar:
@@ -46,11 +63,26 @@ Güvenlik sınırları:
 - Connection string, test çıktısına veya repository dosyalarına yazılmaz.
 - Ayrıntılı rol, migration ve temizleme adımları için `docs/setup/postgresql-windows.md` izlenir.
 
+Database suite project duplicate davranışına ek olarak documentation report/model run persist-read, unique constraint, foreign key ve cascade davranışını doğrular. Bağlantı değişkeni tanımlı değilse beş database testi gerekçeli olarak skip edilir; bu sonuç başarılı PostgreSQL doğrulaması olarak raporlanmaz.
+
 Test tamamlandığında process-level secret temizlenir:
 
 ```powershell
 Remove-Item Env:CODEGUARD_TEST_DATABASE_CONNECTION_STRING -ErrorAction SilentlyContinue
 ```
+
+## Release kapanış kontrolleri
+
+```powershell
+dotnet build CodeGuardAI.sln --configuration Release --no-restore
+dotnet test CodeGuardAI.sln --configuration Release --no-build --filter "Category!=Database"
+dotnet test tests/CodeGuardAI.IntegrationTests --configuration Release --no-build --filter "Category=Database"
+dotnet ef migrations list --project src/CodeGuardAI.Infrastructure --startup-project src/CodeGuardAI.Api --configuration Release --no-build
+```
+
+API Development ortamında çalışırken OpenAPI belgesi `GET /openapi/v1.json`, Swagger UI ise `/swagger` adresindedir. Otomatik test hem `/api/reviews/{reviewId}/documentation` path'inde `post` ve `get` operation'larını hem ilgili response kodlarını doğrular.
+
+Secret scan tracked dosyalarda yüksek olasılıklı Gemini key pattern'lerini ve yanlışlıkla eklenmiş environment/secret dosyalarını arar. Placeholder/fake test değerleri gerçek credential değildir; şüpheli bir eşleşme bulunduğunda değer pushlanmadan revoke/rotate edilir ve Git geçmişi incelenir.
 
 ## Neden bu sınır var?
 

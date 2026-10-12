@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/senagokaslan/CodeGuardAI/actions/workflows/ci.yml/badge.svg)](https://github.com/senagokaslan/CodeGuardAI/actions/workflows/ci.yml)
 
-CodeGuard AI, makinede kayıtlı bir C# repository'sini sınırlı kurallarla tarayan, Gemini'den yapılandırılmış code-review bulguları alan ve seçilen bulgular için açık kullanıcı aksiyonuyla test önerileri üreten local-first bir portföy uygulamasıdır.
+CodeGuard AI, makinede kayıtlı bir C# repository'sini sınırlı kurallarla tarayan; Gemini'den yapılandırılmış code-review bulguları, seçili bulgular için test önerileri ve tamamlanmış review üzerinden kalıcı Markdown teknik raporu üreten local-first bir portföy uygulamasıdır.
 
 ## Problem
 
@@ -17,6 +17,8 @@ Bir LLM'e doğrudan repository yolu veya shell komutu vermek; path traversal, se
 - Review state machine, max-step bütçesi, duplicate review conflict ve stale-run recovery
 - Severity/category filtreli frameworksüz HTML/CSS/JavaScript demo arayüzü
 - Seçili bulgular için ayrı ve explicit test önerisi aksiyonu
+- Tamamlanmış review ve varsa test önerilerinden grounded Markdown raporu üreten Docs Agent
+- Bir review için tek rapor garantili `documentation_reports` persistence ve GET/POST API'si
 - Allowlist edilmiş `.csproj` hedefi için timeout/output-cap kontrollü `dotnet test`
 - Resmi C# SDK ile stdio MCP `read_file` ve `run_tests` adapter'ları
 - PostgreSQL/EF Core persistence, tool/model audit kayıtları ve structured logging
@@ -42,6 +44,14 @@ flowchart LR
 ```
 
 Bağımlılık yönü, ER modeli, review/AI akışı ve MCP tool zinciri için [mimari belgesine](docs/architecture.md) bak.
+
+Ana AI akışı agent zinciri değildir; her adım kullanıcı tarafından ayrı başlatılır ve önceki adımın kalıcı çıktısını tüketir:
+
+```text
+Review Agent -> persisted Finding'ler
+Test Agent   -> seçili Finding'lerden persisted TestCase önerileri (opsiyonel)
+Docs Agent   -> completed ReviewRun + Finding'ler + varsa TestCase'lerden Markdown rapor
+```
 
 ## Gereksinimler
 
@@ -85,7 +95,7 @@ dotnet ef database update --project src/CodeGuardAI.Infrastructure --startup-pro
 dotnet run --project src/CodeGuardAI.Api --launch-profile http
 ```
 
-Tarayıcıda `http://localhost:5253` adresini aç. Project path alanına browser makinesindeki değil, API'nin çalıştığı makinedeki tam klasör yolunu gir. Hazır örnek için bu repository altındaki `sample-repository` klasörünün tam yolunu kullan.
+Tarayıcıda `http://localhost:5253` adresini aç. Swagger UI için `http://localhost:5253/swagger` adresini kullan. Project path alanına browser makinesindeki değil, API'nin çalıştığı makinedeki tam klasör yolunu gir. Hazır örnek için bu repository altındaki `sample-repository` klasörünün tam yolunu kullan.
 
 PostgreSQL kurulumu, migration, geri alma ve local database testi için [Windows PostgreSQL setup](docs/setup/postgresql-windows.md); configuration önceliği için [secret setup](docs/setup/configuration.md) belgesini izle.
 
@@ -100,6 +110,67 @@ dotnet test CodeGuardAI.sln --configuration Release --no-build --filter "Categor
 ```
 
 Gerçek PostgreSQL testleri `Category=Database` etiketiyle local-only tutulur. Ayrıntılar [test stratejisinde](docs/testing.md) yer alır.
+
+## Review → Test → Docs API örnekleri
+
+Review Agent yeni bir run oluşturur:
+
+```http
+POST /api/reviews
+Content-Type: application/json
+
+{
+  "projectId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+  "model": "gemini-3.5-flash-lite",
+  "timeoutSeconds": 60,
+  "maxFindings": 100
+}
+```
+
+`201 Created` response'u `id`, terminal `status`, scan özeti ve grounded `findings` listesini taşır. Bu `id`, sonraki iki explicit aksiyonun `reviewId` değeridir.
+
+Test Agent yalnız seçilmiş persisted finding kimliklerini kabul eder:
+
+```http
+POST /api/reviews/11111111-1111-1111-1111-111111111111/tests
+Content-Type: application/json
+
+{
+  "findingIds": ["bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"],
+  "model": "gemini-3.5-flash-lite",
+  "timeoutSeconds": 60,
+  "maxSuggestions": 50
+}
+```
+
+Başarılı `201 Created` response'u `reviewId`, `modelRunId` ve bounded `tests` listesini döndürür; source dosyasına yazmaz.
+
+Swagger'da önce tamamlanmış bir review seç. Test önerileri opsiyoneldir; hiç `TestCase` yokken de rapor üretilebilir.
+
+```http
+POST /api/reviews/11111111-1111-1111-1111-111111111111/documentation
+Content-Type: application/json
+
+{
+  "model": "gemini-3.5-flash-lite",
+  "timeoutSeconds": 120
+}
+```
+
+Başarılı ilk istek `201 Created` ve aynı raporu okuyan `Location` header'ı döndürür:
+
+```json
+{
+  "id": "22222222-2222-2222-2222-222222222222",
+  "reviewId": "11111111-1111-1111-1111-111111111111",
+  "modelRunId": "33333333-3333-3333-3333-333333333333",
+  "title": "Technical review report",
+  "markdownContent": "# Technical review report\n...",
+  "createdAtUtc": "2026-10-12T09:00:00+00:00"
+}
+```
+
+Rapor daha sonra `GET /api/reviews/{reviewId}/documentation` ile okunur. Eksik review/rapor `404`; tamamlanmamış review veya ikinci/eşzamanlı üretim `409`; provider/parser/grounding hatası içerik sızdırmayan `ProblemDetails` döndürür.
 
 ## MCP host
 
@@ -119,7 +190,7 @@ MCP güvenlik katmanı değildir; mevcut `SafeFileReadTool` ve `SafeDotnetTestRu
 
 ## Beş dakikalık demo
 
-[Demo script](docs/demo-script.md) project kaydı, bounded scan, review bulguları, filtreleme ve explicit test önerisi akışını beş dakikaya sığdırır. [Görsel planı](screenshots/README.md), hangi ekranların ve güvenlik durumlarının gösterileceğini tanımlar.
+[Demo script](docs/demo-script.md) project kaydı, bounded scan, Review Agent, opsiyonel Test Agent ve Swagger üzerinden Docs Agent akışını gösterir. [Görsel planı](screenshots/README.md), hangi ekranların ve güvenlik durumlarının gösterileceğini tanımlar.
 
 ## Güvenlik özeti
 
@@ -128,6 +199,7 @@ MCP güvenlik katmanı değildir; mevcut `SafeFileReadTool` ve `SafeDotnetTestRu
 - Timeout, output cap, cancellation ve audit ortak tool zarfında uygulanır.
 - API/LLM/protocol cevaplarında raw exception veya secret döndürülmez.
 - Prompt, API key, connection string ve repository içeriği structured loglara yazılmaz.
+- Docs Agent repository root/source yüklemez, başka agent çağırmaz ve repository'ye Markdown yazmaz; yalnız persisted canonical kayıtları render eder.
 
 Tehdit modeli ve kalan riskler için [güvenlik belgesine](docs/security.md) bak.
 
@@ -141,6 +213,7 @@ Tehdit modeli ve kalan riskler için [güvenlik belgesine](docs/security.md) bak
 - MCP yalnız local stdio ve tek istemci/process modelidir; uzak HTTP transport ve çok kullanıcılı auth yoktur.
 - Hosted CI gerçek PostgreSQL testi çalıştırmaz; ilişkisel doğrulama ayrı local-only adımdır.
 - Test önerileri repository dosyalarını değiştirmez; otomatik patch/commit özelliği yoktur.
+- Static demo UI Docs Agent kontrolü içermez; rapor üretme/görüntüleme ilk sürümde Swagger veya doğrudan HTTP API üzerinden yapılır.
 
 ## Kanıtlanabilir CV maddeleri
 
@@ -149,18 +222,22 @@ Tehdit modeli ve kalan riskler için [güvenlik belgesine](docs/security.md) bak
 - Path traversal/reparse-point/secret-path savunmalı dosya okuma ve allowlist/timeout/output-cap kontrollü `dotnet test` araçlarını ortak audit zarfında tasarladı.
 - Resmi ModelContextProtocol C# SDK ile güvenli tool servislerini bypass etmeyen stdio `read_file` ve `run_tests` adapter'ları geliştirdi.
 - PostgreSQL filtered unique index'leri ve bounded C# state machine ile duplicate workflow, idempotency, cancellation ve stale-run recovery davranışlarını deterministik hale getirdi.
+- Completed review ve opsiyonel test önerilerini strict JSON/ID grounding ile kalıcı, deterministik Markdown rapora dönüştüren üçüncü bir Docs Agent geliştirdi.
 - Secretsiz GitHub Actions pipeline'ında pinli .NET SDK ile restore-build-offline-test kalite kapısı kurdu.
 
 ## Final checklist
 
 - [x] README problem, mimari, quickstart, güvenlik ve limitations içeriyor.
 - [x] Architecture, ER, AI ve MCP diyagramları güncel kodla karşılaştırıldı.
-- [x] Windows PostgreSQL, User Secrets ve migration akışı fresh local database ile doğrulandı.
-- [x] Beş dakikalık demo script'i ve 2-4 görsellik çekim planı hazırlandı.
+- [x] Windows PostgreSQL, User Secrets ve güvenli migration prosedürü belgelendi.
+- [ ] Mevcut development veritabanında `20261008193806_AddDocumentationReport` pending; canlı Docs demo öncesi `dotnet ef database update` uygulanmalı.
+- [x] Beş dakikalık demo script'i ve Review/Test/Docs akışını kapsayan çekim planı hazırlandı.
 - [x] CV maddeleri yalnız test veya kaynak kodla kanıtlanabilen özelliklerden oluşuyor.
 - [x] Offline Release build/test yeşil ve database test sınırı açık.
 - [x] Repository secret taraması temiz.
 - [x] Geçerli Gemini auth key ile `gemini-3.5-flash-lite` üzerinde gerçek review ve test önerisi akışı doğrulandı; secret yalnız User Secrets'ta tutuldu.
+- [x] Docs Agent offline fake-provider, concurrency, API/OpenAPI ve persistence contract testleriyle doğrulandı.
+- [ ] Docs Agent'ın canlı Gemini çağrısı bu kapanış doğrulamasında çalıştırılmadı; Swagger adımları demo script'inde belgeli.
 - [x] [GitHub hosted CI run](https://github.com/senagokaslan/CodeGuardAI/actions/runs/37807822247) secretsiz restore, build, unit/eval ve API/integration adımlarıyla yeşil doğrulandı.
 
 ## Dokümantasyon haritası

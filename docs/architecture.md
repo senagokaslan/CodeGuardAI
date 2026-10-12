@@ -1,6 +1,6 @@
 # Mimari
 
-Bu belge, production project reference'ları, EF mapping'leri, workflow'lar ve MCP adapter'larıyla karşılaştırılmış güncel mimariyi gösterir. Karar gerekçeleri [ADR-001](adr/ADR-001-modular-monolith.md), [ADR-003](adr/ADR-003-mcp-host.md) ve planlanan Docs Agent için [ADR-004](adr/ADR-004-docs-agent.md) içinde tutulur.
+Bu belge, production project reference'ları, EF mapping'leri, workflow'lar ve MCP adapter'larıyla karşılaştırılmış güncel mimariyi gösterir. Karar gerekçeleri [ADR-001](adr/ADR-001-modular-monolith.md), [ADR-003](adr/ADR-003-mcp-host.md) ve Docs Agent için [ADR-004](adr/ADR-004-docs-agent.md) içinde tutulur.
 
 ## Katmanlar ve bağımlılık yönü
 
@@ -43,6 +43,8 @@ erDiagram
     REVIEW_RUN ||--o{ TEST_CASE : suggests
     REVIEW_RUN ||--o{ AI_MODEL_RUN : records
     REVIEW_RUN o|--o{ TOOL_EXECUTION : correlates
+    REVIEW_RUN ||--o| DOCUMENTATION_REPORT : documents
+    AI_MODEL_RUN ||--o| DOCUMENTATION_REPORT : generated
 
     PROJECT {
         uuid id PK
@@ -101,6 +103,14 @@ erDiagram
         string input_summary
         string output_summary
     }
+    DOCUMENTATION_REPORT {
+        uuid id PK
+        uuid review_run_id FK,UK
+        uuid model_run_id FK
+        string title
+        text markdown_content
+        timestamptz created_at_utc
+    }
 ```
 
 Önemli kalıcı garantiler:
@@ -108,6 +118,8 @@ erDiagram
 - `projects.normalized_root_path` unique'tir.
 - Aynı project için `Pending`/`Running` review'larda filtreli unique index vardır.
 - Aynı review için yalnız bir başarılı `TestGeneration` model run'ı olabilir.
+- `documentation_reports.review_run_id` unique'tir; aynı review için yalnız bir başarılı Markdown raporu olabilir.
+- Documentation report hem `ReviewRun` hem onu üreten `AIModelRun(Purpose=Documentation)` kaydına bağlıdır.
 - Finding confidence/line aralıkları ile metrik süreleri check constraint'lerle korunur.
 - Project veya ReviewRun silinmesi ilişkili kayıtları cascade eder.
 
@@ -124,7 +136,7 @@ sequenceDiagram
     participant Agent as ReviewAgent
     participant LLM as GeminiProvider
 
-    User->>API: POST /reviews
+    User->>API: POST /api/reviews
     API->>WF: CreateAsync(command, cancellationToken)
     WF->>DB: TryCreatePendingAsync
     Note over DB: duplicate/stale-run policy transaction içinde
@@ -144,11 +156,9 @@ sequenceDiagram
 
 Review adımları sabittir; model yeni workflow adımı üretemez ve agent başka agent çağırmaz. Cancellation scanner/provider/tool zincirine taşınır; başlamış review iptalinde terminal `Failed/Cancelled` kaydı request token'dan bağımsız persist edilir. Test önerisi aynı review için ayrı kullanıcı aksiyonudur ve repository'yi değiştirmez.
 
-## Planlanan Docs Agent sınırı
+## Review → Test → Docs akışı
 
-> **Durum:** Mimari karar ve public contract kabul edildi; kod, migration, DI ve endpoint implementasyonu henüz yoktur.
-
-Docs Agent, Review veya Test Agent'ı çağıran bir üst agent olmayacaktır. Yalnız completed review'ın PostgreSQL'de saklanan finding'lerini ve varsa test önerilerini okuyacaktır.
+Üç agent birbirini çağırmaz. Review zorunlu başlangıçtır; Test ve Docs ayrı, explicit HTTP istekleridir. Test önerisi yoksa Docs yine rapor üretebilir. Docs Agent yalnız completed review'ın PostgreSQL'de saklanan finding'lerini ve varsa test önerilerini okur.
 
 ```mermaid
 flowchart LR
@@ -166,7 +176,7 @@ flowchart LR
     Renderer --> Report[(PostgreSQL documentation report)]
 ```
 
-Planlanan contract:
+Çalışan contract:
 
 - `POST /api/reviews/{reviewId}/documentation` bir completed review için tek rapor üretir.
 - `GET /api/reviews/{reviewId}/documentation` persisted Markdown raporunu görüntüler.
@@ -176,7 +186,32 @@ Planlanan contract:
 - Bir review için tek başarılı rapor PostgreSQL unique constraint ile korunur; failed deneme retry'ı engellemez.
 - Docs workflow bounded ve cancellation-aware olur; Review/Test workflow'larının durumunu değiştirmez.
 
-Bu bölüm gelecekteki uygulama sınırını gösterir; mevcut ER diyagramına documentation tablosu, mevcut DI listesine Docs servisleri veya çalışan endpoint listesine documentation route'u eklenmiş değildir.
+Akış `LoadSource → ValidateCompletedReview → CheckIdempotency → RunAgent → RenderMarkdown → PersistTerminal` adımlarıyla sınırlıdır. Başarılı `DocumentationReport` ve başarılı `AIModelRun` aynı transaction'da yazılır. Provider/parser/grounding failure yalnız failed model run oluşturur; kısmi rapor oluşturmaz. PostgreSQL unique constraint eşzamanlı iki isteğin son kararını verir ve kaybeden istek `409 documentation.already_generated` alır.
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant API as DocumentationController
+    participant WF as DocsOrchestrator
+    participant DB as EfDocsWorkflowStore
+    participant Agent as DocsAgent
+    participant LLM as GeminiProvider
+
+    User->>API: POST /api/reviews/{reviewId}/documentation
+    API->>WF: CreateAsync(command, cancellationToken)
+    WF->>DB: completed ReviewRun + Findings + optional TestCases
+    WF->>Agent: persisted canonical input
+    Agent->>LLM: docs-v1 + strict JSON schema
+    LLM-->>Agent: IDs + bounded prose fields
+    Agent-->>WF: parsed and ID-grounded report model
+    WF->>WF: deterministic Markdown render
+    WF->>DB: AIModelRun + DocumentationReport transaction
+    WF-->>API: DocumentationReadModel
+    API-->>User: 201 + Location
+    User->>API: GET /api/reviews/{reviewId}/documentation
+    API->>DB: persisted report
+    API-->>User: 200 + Markdown content
+```
 
 ## MCP tool zinciri
 
@@ -208,4 +243,4 @@ MCP input'u root path, shell command, working directory, executable, timeout vey
 - Gemini transport retry'sı orchestrator adım bütçesinden ayrıdır.
 - Log scope `CorrelationId`, `ReviewRunId` ve `ProjectId` taşır; prompt, secret ve repository içeriği taşımaz.
 - CI dış servis kullanmadan Application/API sözleşmesini doğrular; gerçek PostgreSQL davranışı local-only testtir.
-- Planlanan Docs Agent'ın public/failure/idempotency sözleşmesi ADR-004 ile sabittir; implementasyon tamamlanana kadar çalışan özellik olarak gösterilmez.
+- Docs API invalid request'i `400`, eksik review/raporu `404`, incomplete veya duplicate isteği `409`, beklenmeyen üretim hatasını redacted `500` olarak map eder.

@@ -18,6 +18,8 @@ Bu proje authentication, multi-tenant izolasyon, sandbox veya kötü niyetli rep
 | Sonsuz agent loop | Sabit state machine ve max-step bütçesi | Provider gecikmesi ayrıca timeout/cancellation'a bağlıdır |
 | Duplicate concurrent workflow | PostgreSQL filtered unique index ve typed `409` mapping | Stale run yeni request gelene kadar görünür kalabilir |
 | Provider transient failure | Yalnız 429/5xx için 0-2 bounded retry | Kota veya kalıcı provider hatası kullanıcıya failure olur |
+| Docs raporunda model uydurması | Strict JSON, persisted finding/test ID grounding ve canonical server-side Markdown renderer | Modelin bounded açıklama alanları yine kullanıcı değerlendirmesi gerektirir |
+| Duplicate Docs üretimi | Pre-check + `documentation_reports.review_run_id` unique constraint + typed `409` | Failed deneme audit edilir ve güvenli retry'a izin verilir |
 | Log/protocol secret sızıntısı | Structured redacted loglar, header redaction, raw exception vermeyen contract | Operatör terminal/debug araçlarını güvenli tutmalıdır |
 | MCP'nin tool'u bypass etmesi | İnce adapter yalnız Application portunu çağırır | MCP transport kendi başına authentication sağlamaz |
 
@@ -48,9 +50,9 @@ Allowlist/denylist ve byte limitlerinden geçen repository context'i Gemini'ye g
 
 Prompt içeriği, repository içeriği ve API key loglanmaz. Loglanan metrikler kimlikler, model/prompt sürümü, süre, karakter sayıları, finding sayısı ve stable error type ile sınırlıdır.
 
-## Planlanan Docs Agent güvenlik sözleşmesi
+## Docs Agent güvenlik sözleşmesi
 
-> **Durum:** ADR-004 ile kabul edilmiş tasarım kuralıdır; Docs Agent implementasyonu henüz mevcut değildir.
+> **Durum:** Application, Gemini adapter, EF persistence, API ve offline test katmanlarında uygulanmıştır.
 
 - Docs Agent yalnız completed `ReviewRun`, persisted grounded finding'ler ve varsa persisted test önerilerini kullanır.
 - Repository yeniden taranmaz; root path veya source content Docs Agent/provider girdisine eklenmez.
@@ -61,14 +63,18 @@ Prompt içeriği, repository içeriği ve API key loglanmaz. Loglanan metrikler 
 - Bir review için tek başarılı rapor database constraint ile korunur; duplicate concurrent istek deterministic conflict olur.
 - Kısmi veya grounding'den geçmeyen çıktı rapor olarak persist edilmez. Cancellation provider/persistence sınırlarına taşınır.
 - Docs Agent Review Agent veya Test Agent çağırmaz; agent chain ve recursive loop oluşturmaz.
+- API input'u yalnız bounded `model` ve `timeoutSeconds` alanlarını kabul eder; repository path, raw prompt, Markdown şablonu veya output path kabul etmez.
+- `GeminiDocumentationSchema` `application/json`, zorunlu alanlar, item limitleri ve `additionalProperties: false` ile provider cevabını sınırlar.
+- Başarılı rapor ile başarılı documentation model run aynı transaction'da persist edilir; malformed/unknown/duplicate kimlikler rapor tablosuna ulaşmaz.
 
-Bu kontroller sonraki implementasyon aşamalarının acceptance kriteridir. Kod ve test kanıtı oluşmadan tamamlanmış güvenlik özelliği olarak değerlendirilmez.
+Kod kanıtı `DocsAgent`, `DocumentationGroundingValidator`, `MarkdownReportRenderer`, `DocsOrchestrator`, `EfDocsWorkflowStore`, `DocumentationController` ve documentation test suite'idir.
 
 ## Error, cancellation ve recovery
 
 - HTTP yüzeyi expected failure'ları stable code içeren `ProblemDetails` olarak döndürür.
 - MCP expected failure'ları structured error olarak döndürür; raw exception/stack trace döndürmez.
 - Cancellation token controller'dan scanner, provider ve tool'a aktarılır.
+- Documentation cancellation controller → orchestrator → agent/provider/persistence zincirine taşınır; cancellation veya provider failure raw response/Markdown loglamadan failed model run olarak audit edilir.
 - İptal edilmiş review, `Failed/Cancelled` terminal durumuna request token'dan bağımsız kaydedilir.
 - Process çökmesinden kalan aktif review otomatik replay edilmez; sonraki request timeout'u aşmış kaydı `Failed/RecoveryTimeout` yapar.
 
