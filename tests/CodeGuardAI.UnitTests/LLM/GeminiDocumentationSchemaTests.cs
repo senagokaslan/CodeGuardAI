@@ -18,8 +18,9 @@ public sealed class GeminiDocumentationSchemaTests
             ["title", "executiveSummary", "findingSections", "testCaseSections", "conclusion"],
             root.GetProperty("required").EnumerateArray().Select(static item => item.GetString()));
         var properties = root.GetProperty("properties");
-        Assert.Equal(100, properties.GetProperty("findingSections").GetProperty("maxItems").GetInt32());
-        Assert.Equal(50, properties.GetProperty("testCaseSections").GetProperty("maxItems").GetInt32());
+        Assert.False(properties.GetProperty("title").TryGetProperty("maxLength", out _));
+        Assert.False(properties.GetProperty("findingSections").TryGetProperty("maxItems", out _));
+        Assert.False(properties.GetProperty("testCaseSections").TryGetProperty("maxItems", out _));
         AssertStrictSection(
             properties.GetProperty("findingSections"),
             "findingId",

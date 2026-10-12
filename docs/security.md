@@ -64,7 +64,7 @@ Prompt içeriği, repository içeriği ve API key loglanmaz. Loglanan metrikler 
 - Kısmi veya grounding'den geçmeyen çıktı rapor olarak persist edilmez. Cancellation provider/persistence sınırlarına taşınır.
 - Docs Agent Review Agent veya Test Agent çağırmaz; agent chain ve recursive loop oluşturmaz.
 - API input'u yalnız bounded `model` ve `timeoutSeconds` alanlarını kabul eder; repository path, raw prompt, Markdown şablonu veya output path kabul etmez.
-- `GeminiDocumentationSchema` `application/json`, zorunlu alanlar, item limitleri ve `additionalProperties: false` ile provider cevabını sınırlar.
+- `GeminiDocumentationSchema` `application/json`, zorunlu alanlar ve `additionalProperties: false` ile provider cevabının şeklini sınırlar. Gemini'nin desteklemediği length/item constraint'leri provider schema'ya konmaz; aynı sınırlar `DocumentationResultParser` ve `DocsAgentPolicy` tarafından Application katmanında fail-closed uygulanır.
 - Başarılı rapor ile başarılı documentation model run aynı transaction'da persist edilir; malformed/unknown/duplicate kimlikler rapor tablosuna ulaşmaz.
 
 Kod kanıtı `DocsAgent`, `DocumentationGroundingValidator`, `MarkdownReportRenderer`, `DocsOrchestrator`, `EfDocsWorkflowStore`, `DocumentationController` ve documentation test suite'idir.

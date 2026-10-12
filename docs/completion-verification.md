@@ -8,7 +8,7 @@ Bu belge final kabul maddelerini çalışan kod ve doğrulama kanıtlarıyla eş
 |---|---|---|
 | Production backend C#/.NET 10 ve ASP.NET Core; Python yok | Sağlandı | `CodeGuardAI.sln`, `global.json`, `src/CodeGuardAI.Api` |
 | Docker/container dosyası, komutu veya CI service container yok | Sağlandı | `.github/workflows/ci.yml`, repository dosya taraması |
-| Local Windows PostgreSQL kurulumu ve güncel EF migration | Kod/prosedür sağlandı; mevcut DB pending | `docs/setup/postgresql-windows.md`; `20261008193806_AddDocumentationReport` migration dosyası mevcut fakat 12 Ekim 2026 listesindeki development DB'ye uygulanmamış |
+| Local Windows PostgreSQL kurulumu ve güncel EF migration | Sağlandı | `docs/setup/postgresql-windows.md`; üç migration 12 Ekim 2026 tarihinde development DB'ye uygulandı |
 | Project, ReviewRun, Finding, TestCase, DocumentationReport, AIModelRun ve ToolExecution modeli API ile uyumlu | Sağlandı | Domain modelleri, `CodeGuardDbContext`, API response contract'ları |
 | Scanner secret/path/reparse/size kurallarını uygular | Sağlandı | `RepositoryScannerSecurityTests`, `RepositoryScannerTests`, root-bound scan endpoint testi |
 | Application Gemini yerine `ILLMProvider` portuna bağlı | Sağlandı | `ReviewAgent`, `TestAgent`, `DocsAgent`, DI composition root |
@@ -61,10 +61,12 @@ Geriye uyumluluk için eski `/projects` ve `/reviews` route'ları korunur; canon
 | Database suite (`Category=Database`) | 0 başarılı, 0 başarısız, 5 atlanan; güvenli `_test` bağlantı değişkeni tanımlı değil |
 | Docs odaklı regresyon | 71 unit + 13 integration başarılı; 4 database testi aynı nedenle atlandı |
 | Review/Test Agent regresyonu | 21 unit + 3 integration başarılı; 0 başarısız |
-| EF migration listesi | `InitialCreate`, `WorkflowSafetyConcurrency`, `AddDocumentationReport`; sonuncusu development DB için pending |
+| EF migration listesi | `InitialCreate`, `WorkflowSafetyConcurrency`, `AddDocumentationReport`; üçü de development DB'ye uygulandı |
 | Development OpenAPI | Review POST, Test POST, Documentation POST ve Documentation GET path'leri mevcut |
 | Swagger UI / health | `/swagger/index.html` ve `/health` HTTP 200 |
 | Secret scan | Tracked dosyalarda yüksek olasılıklı Gemini key veya hassas dosya adı bulunmadı |
-| Gerçek Gemini | Çalıştırılmadı; bütün otomatik doğrulama offline fake provider/handler kullandı |
+| Gerçek Gemini | User Secrets key'iyle model listesi doğrulandı; `gemini-3.8-flash` Docs POST `201`, GET `200`, ikinci POST `409` verdi |
 
-Release adayı kod/test açısından yeşildir. Canlı Docs Agent demosundan önce mevcut local development veritabanına pending migration uygulanmalı ve Swagger'daki manuel Gemini adımları geçerli key/kota ile yürütülmelidir.
+Canlı Docs doğrulamasında report `c6429a1d-fc6f-4ae8-bb1e-b6a72dd26fbc`, model run `a862dd4f-0196-4415-be33-c4c59adec4a7` olarak persist edildi; Markdown 2.381 karakterdi. İlk denemede Gemini'nin güncel schema uygulamasının `minLength/maxLength/maxItems` anahtarlarını reddettiği görüldü. Provider schema bu desteklenmeyen anahtarlardan arındırıldı; aynı limitler Application parser/policy katmanında korunarak Release suite yeniden yeşil çalıştırıldı.
+
+Model kataloğu zamanla değişebilir. Her canlı demo öncesi key'in `generateContent` erişimi doğrulanmalı; key URL, body, log veya dokümana yazılmamalıdır.

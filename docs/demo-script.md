@@ -36,7 +36,7 @@ Beklenen: duplicate normalized path ikinci kez oluşturulursa okunabilir `409` m
 
 ## 1:35-2:25 — Review Agent
 
-1. Doğrulanmış demo modeli `gemini-3.5-flash-lite` ve max finding alanlarını göster.
+1. Demo öncesi erişilebilirliği doğrulanmış model adını ve max finding alanlarını göster. 12 Ekim 2026 canlı doğrulamasında `gemini-3.8-flash` kullanıldı; provider kataloğu değişebilir.
 2. Run review'e bas.
 3. Progress/cancel durumunu göster.
 4. Tamamlandığında included files, skipped entries, included bytes ve finding sayısını açıkla.
@@ -69,7 +69,7 @@ API hatalarının raw exception yerine HTTP status, açıklama ve stable structu
 
 ```json
 {
-  "model": "gemini-3.5-flash-lite",
+  "model": "gemini-3.8-flash",
   "timeoutSeconds": 120
 }
 ```

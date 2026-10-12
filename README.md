@@ -121,7 +121,7 @@ Content-Type: application/json
 
 {
   "projectId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-  "model": "gemini-3.5-flash-lite",
+  "model": "gemini-3.8-flash",
   "timeoutSeconds": 60,
   "maxFindings": 100
 }
@@ -137,7 +137,7 @@ Content-Type: application/json
 
 {
   "findingIds": ["bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"],
-  "model": "gemini-3.5-flash-lite",
+  "model": "gemini-3.8-flash",
   "timeoutSeconds": 60,
   "maxSuggestions": 50
 }
@@ -152,7 +152,7 @@ POST /api/reviews/11111111-1111-1111-1111-111111111111/documentation
 Content-Type: application/json
 
 {
-  "model": "gemini-3.5-flash-lite",
+  "model": "gemini-3.8-flash",
   "timeoutSeconds": 120
 }
 ```
@@ -171,6 +171,8 @@ Başarılı ilk istek `201 Created` ve aynı raporu okuyan `Location` header'ı 
 ```
 
 Rapor daha sonra `GET /api/reviews/{reviewId}/documentation` ile okunur. Eksik review/rapor `404`; tamamlanmamış review veya ikinci/eşzamanlı üretim `409`; provider/parser/grounding hatası içerik sızdırmayan `ProblemDetails` döndürür.
+
+Model kataloğu provider tarafından değiştirilebilir. Demo öncesi API key'in erişebildiği `generateContent` modelleri kontrol edilmeli; `gemini-3.8-flash` 12 Ekim 2026 canlı Docs doğrulamasında başarılı olmuştur.
 
 ## MCP host
 
@@ -230,14 +232,14 @@ Tehdit modeli ve kalan riskler için [güvenlik belgesine](docs/security.md) bak
 - [x] README problem, mimari, quickstart, güvenlik ve limitations içeriyor.
 - [x] Architecture, ER, AI ve MCP diyagramları güncel kodla karşılaştırıldı.
 - [x] Windows PostgreSQL, User Secrets ve güvenli migration prosedürü belgelendi.
-- [ ] Mevcut development veritabanında `20261008193806_AddDocumentationReport` pending; canlı Docs demo öncesi `dotnet ef database update` uygulanmalı.
+- [x] `20261008193806_AddDocumentationReport` mevcut development veritabanına uygulandı.
 - [x] Beş dakikalık demo script'i ve Review/Test/Docs akışını kapsayan çekim planı hazırlandı.
 - [x] CV maddeleri yalnız test veya kaynak kodla kanıtlanabilen özelliklerden oluşuyor.
 - [x] Offline Release build/test yeşil ve database test sınırı açık.
 - [x] Repository secret taraması temiz.
 - [x] Geçerli Gemini auth key ile `gemini-3.5-flash-lite` üzerinde gerçek review ve test önerisi akışı doğrulandı; secret yalnız User Secrets'ta tutuldu.
 - [x] Docs Agent offline fake-provider, concurrency, API/OpenAPI ve persistence contract testleriyle doğrulandı.
-- [ ] Docs Agent'ın canlı Gemini çağrısı bu kapanış doğrulamasında çalıştırılmadı; Swagger adımları demo script'inde belgeli.
+- [x] Docs Agent `gemini-3.8-flash` ile canlı doğrulandı: POST `201`, GET `200`, ikinci POST `409`; secret yalnız User Secrets'ta tutuldu.
 - [x] [GitHub hosted CI run](https://github.com/senagokaslan/CodeGuardAI/actions/runs/37807822247) secretsiz restore, build, unit/eval ve API/integration adımlarıyla yeşil doğrulandı.
 
 ## Dokümantasyon haritası

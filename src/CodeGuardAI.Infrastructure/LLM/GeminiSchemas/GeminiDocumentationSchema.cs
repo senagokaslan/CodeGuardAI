@@ -14,16 +14,15 @@ public static class GeminiDocumentationSchema
         {
           "type": "object",
           "properties": {
-            "title": { "type": "string", "minLength": 1, "maxLength": 200 },
-            "executiveSummary": { "type": "string", "minLength": 1, "maxLength": 4000 },
+            "title": { "type": "string" },
+            "executiveSummary": { "type": "string" },
             "findingSections": {
               "type": "array",
-              "maxItems": 100,
               "items": {
                 "type": "object",
                 "properties": {
                   "findingId": { "type": "string" },
-                  "impact": { "type": "string", "minLength": 1, "maxLength": 2000 }
+                  "impact": { "type": "string" }
                 },
                 "required": ["findingId", "impact"],
                 "additionalProperties": false
@@ -31,18 +30,17 @@ public static class GeminiDocumentationSchema
             },
             "testCaseSections": {
               "type": "array",
-              "maxItems": 50,
               "items": {
                 "type": "object",
                 "properties": {
                   "testCaseId": { "type": "string" },
-                  "coverage": { "type": "string", "minLength": 1, "maxLength": 2000 }
+                  "coverage": { "type": "string" }
                 },
                 "required": ["testCaseId", "coverage"],
                 "additionalProperties": false
               }
             },
-            "conclusion": { "type": "string", "minLength": 1, "maxLength": 4000 }
+            "conclusion": { "type": "string" }
           },
           "required": ["title", "executiveSummary", "findingSections", "testCaseSections", "conclusion"],
           "additionalProperties": false
