@@ -43,6 +43,108 @@ public sealed class DocsAgentTests
         Assert.Equal("docs-v1", result.Value.PromptVersion);
         Assert.Equal("Technical report", result.Value.Report.Title);
         Assert.Empty(result.Value.Report.TestCases);
+        Assert.Equal(LLMOperation.Documentation, Assert.Single(provider.Invocations).Operation);
+    }
+
+    [Fact]
+    public async Task Completed_review_with_findings_and_tests_produces_fully_grounded_report()
+    {
+        var review = CreateReview(ReviewStatus.Completed);
+        var finding = CreateFinding(review.Id);
+        var testCase = DocumentationGroundingValidatorTests.CreateTestCase();
+        var input = new DocsAgentInput(
+            review,
+            "Example project",
+            [finding],
+            [testCase],
+            new DocsAgentPolicy("docs-model", TimeSpan.FromSeconds(10)));
+        var provider = ProviderWithResponse(ResponseJson(
+            [new { findingId = finding.Id, impact = "Finding impact" }],
+            [new { testCaseId = testCase.Id, coverage = "Test coverage" }]));
+
+        var result = await CreateAgent(provider).RunAsync(input, CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Same(finding, Assert.Single(result.Value.Report.Findings).Finding);
+        Assert.Same(testCase, Assert.Single(result.Value.Report.TestCases).TestCase);
+        Assert.Equal(1, result.Value.FindingCount);
+        Assert.Equal(1, result.Value.TestCaseCount);
+    }
+
+    [Theory]
+    [InlineData("unknown-finding", "documentation.unknown_finding")]
+    [InlineData("duplicate-finding", "documentation.duplicate_finding")]
+    [InlineData("unknown-test", "documentation.unknown_test_case")]
+    [InlineData("duplicate-test", "documentation.duplicate_test_case")]
+    public async Task Unknown_or_duplicate_identifiers_fail_closed(
+        string scenario,
+        string expectedCode)
+    {
+        var review = CreateReview(ReviewStatus.Completed);
+        var finding = CreateFinding(review.Id);
+        var testCase = DocumentationGroundingValidatorTests.CreateTestCase();
+        var findingId = scenario == "unknown-finding" ? Guid.NewGuid() : finding.Id;
+        var testCaseId = scenario == "unknown-test" ? Guid.NewGuid() : testCase.Id;
+        var findingSections = scenario == "duplicate-finding"
+            ? new object[]
+            {
+                new { findingId, impact = "First" },
+                new { findingId, impact = "Second" }
+            }
+            : [new { findingId, impact = "Impact" }];
+        var testSections = scenario == "duplicate-test"
+            ? new object[]
+            {
+                new { testCaseId, coverage = "First" },
+                new { testCaseId, coverage = "Second" }
+            }
+            : [new { testCaseId, coverage = "Coverage" }];
+        var provider = ProviderWithResponse(ResponseJson(findingSections, testSections));
+        var input = new DocsAgentInput(
+            review,
+            "Example project",
+            [finding],
+            [testCase],
+            new DocsAgentPolicy("docs-model", TimeSpan.FromSeconds(10)));
+
+        var result = await CreateAgent(provider).RunAsync(input, CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(expectedCode, result.Error.Code);
+    }
+
+    [Theory]
+    [InlineData("not-json")]
+    [InlineData("{\"title\":\"Incomplete\"}")]
+    public async Task Malformed_provider_json_fails_closed(string content)
+    {
+        var provider = ProviderWithResponse(content);
+
+        var result = await CreateAgent(provider).RunAsync(CreateInput(), CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("docs_agent.invalid_response", result.Error.Code);
+    }
+
+    [Theory]
+    [InlineData(LLMProviderErrorType.Timeout, "docs_agent.provider_timeout")]
+    [InlineData(LLMProviderErrorType.RateLimit, "docs_agent.provider_rate_limit")]
+    [InlineData(LLMProviderErrorType.Unavailable, "docs_agent.provider_unavailable")]
+    [InlineData(LLMProviderErrorType.InvalidResponse, "docs_agent.provider_invalid_response")]
+    public async Task Provider_failures_remain_typed_at_agent_boundary(
+        LLMProviderErrorType providerErrorType,
+        string expectedCode)
+    {
+        var provider = new FakeLLMProvider();
+        provider.EnqueueResult(LLMProviderResult.Failure(new LLMProviderError(
+            providerErrorType,
+            "provider.failure",
+            "Provider failed.")));
+
+        var result = await CreateAgent(provider).RunAsync(CreateInput(), CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(expectedCode, result.Error.Code);
     }
 
     [Fact]

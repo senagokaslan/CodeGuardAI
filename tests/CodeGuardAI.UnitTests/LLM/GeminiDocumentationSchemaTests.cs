@@ -17,6 +17,17 @@ public sealed class GeminiDocumentationSchemaTests
         Assert.Equal(
             ["title", "executiveSummary", "findingSections", "testCaseSections", "conclusion"],
             root.GetProperty("required").EnumerateArray().Select(static item => item.GetString()));
+        var properties = root.GetProperty("properties");
+        Assert.Equal(100, properties.GetProperty("findingSections").GetProperty("maxItems").GetInt32());
+        Assert.Equal(50, properties.GetProperty("testCaseSections").GetProperty("maxItems").GetInt32());
+        AssertStrictSection(
+            properties.GetProperty("findingSections"),
+            "findingId",
+            "impact");
+        AssertStrictSection(
+            properties.GetProperty("testCaseSections"),
+            "testCaseId",
+            "coverage");
     }
 
     [Fact]
@@ -31,5 +42,18 @@ public sealed class GeminiDocumentationSchemaTests
 
         Assert.True(GeminiDocumentationSchema.Parse(valid).IsSuccess);
         Assert.True(GeminiDocumentationSchema.Parse(invalid).IsFailure);
+    }
+
+    private static void AssertStrictSection(
+        JsonElement section,
+        string idProperty,
+        string textProperty)
+    {
+        var items = section.GetProperty("items");
+        Assert.Equal("object", items.GetProperty("type").GetString());
+        Assert.False(items.GetProperty("additionalProperties").GetBoolean());
+        Assert.Equal(
+            [idProperty, textProperty],
+            items.GetProperty("required").EnumerateArray().Select(static item => item.GetString()));
     }
 }

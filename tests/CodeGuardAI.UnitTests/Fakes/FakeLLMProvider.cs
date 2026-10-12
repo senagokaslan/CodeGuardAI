@@ -32,24 +32,25 @@ public sealed class FakeLLMProvider : ILLMProvider
         LLMRequest request,
         CancellationToken cancellationToken)
     {
-        return ExecuteAsync(request, cancellationToken);
+        return ExecuteAsync(LLMOperation.Review, request, cancellationToken);
     }
 
     public Task<LLMProviderResult> GenerateTestsAsync(
         LLMRequest request,
         CancellationToken cancellationToken)
     {
-        return ExecuteAsync(request, cancellationToken);
+        return ExecuteAsync(LLMOperation.Tests, request, cancellationToken);
     }
 
     public Task<LLMProviderResult> GenerateDocumentationAsync(
         LLMRequest request,
         CancellationToken cancellationToken)
     {
-        return ExecuteAsync(request, cancellationToken);
+        return ExecuteAsync(LLMOperation.Documentation, request, cancellationToken);
     }
 
     private Task<LLMProviderResult> ExecuteAsync(
+        LLMOperation operation,
         LLMRequest request,
         CancellationToken cancellationToken)
     {
@@ -60,11 +61,19 @@ public sealed class FakeLLMProvider : ILLMProvider
             throw new InvalidOperationException("No fake LLM response is queued.");
         }
 
-        _invocations.Add(new LLMInvocation(request, cancellationToken));
+        _invocations.Add(new LLMInvocation(operation, request, cancellationToken));
         return _steps.Dequeue()(request, cancellationToken);
     }
 }
 
+public enum LLMOperation
+{
+    Review,
+    Tests,
+    Documentation
+}
+
 public sealed record LLMInvocation(
+    LLMOperation Operation,
     LLMRequest Request,
     CancellationToken CancellationToken);

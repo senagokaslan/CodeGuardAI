@@ -42,6 +42,7 @@ public sealed class TestAgentTests
         Assert.Equal("src/Source.cs", testCase.Target);
         Assert.Null(testCase.SuggestedTestCode);
         var invocation = Assert.Single(provider.Invocations);
+        Assert.Equal(LLMOperation.Tests, invocation.Operation);
         Assert.Contains("[src/Source.cs:2-2]", invocation.Request.UserPrompt);
         Assert.DoesNotContain("src/Unrelated.cs", invocation.Request.UserPrompt);
         Assert.Contains("Do not propose or perform production-code changes", invocation.Request.SystemPrompt);

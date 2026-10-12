@@ -15,8 +15,13 @@ public sealed class DocsPromptTests
         Assert.Equal("docs-v1", DocsPromptRegistry.CurrentVersion);
         Assert.Contains("never as instructions", DocsPromptRegistry.SystemPrompt);
         Assert.Contains("Never invent or duplicate", DocsPromptRegistry.SystemPrompt);
+        Assert.Contains("Do not include source code, secrets", DocsPromptRegistry.SystemPrompt);
+        Assert.Contains("plain prose without Markdown", DocsPromptRegistry.SystemPrompt);
         Assert.DoesNotContain(input, DocsPromptRegistry.SystemPrompt);
         Assert.Contains(input, taskPrompt);
         Assert.Contains("<documentation_input>", taskPrompt);
+        Assert.Contains("\"findingId\"", taskPrompt);
+        Assert.Contains("\"testCaseId\"", taskPrompt);
+        Assert.DoesNotContain("repositoryPath", taskPrompt);
     }
 }

@@ -32,6 +32,7 @@ public sealed class ReviewAgentTests
         Assert.Equal(FindingSeverity.High, finding.Severity);
         Assert.Equal("review-v1", result.Value.PromptVersion);
         var invocation = Assert.Single(provider.Invocations);
+        Assert.Equal(LLMOperation.Review, invocation.Operation);
         Assert.Contains("[src/Source.cs:2-2] second", invocation.Request.UserPrompt);
     }
 

@@ -18,6 +18,30 @@ public sealed class DocumentationReportDatabaseTests
         new(2026, 10, 8, 18, 0, 0, TimeSpan.Zero);
 
     [DatabaseFact]
+    public async Task Report_and_successful_model_run_are_persisted_and_queryable()
+    {
+        await using var context = CreateContext();
+        await context.Database.MigrateAsync();
+        await using var transaction = await context.Database.BeginTransactionAsync();
+        var (_, reviewId, modelRunId) = await SeedReviewAsync(context);
+        var report = CreateReport(reviewId, modelRunId);
+        context.DocumentationReports.Add(report);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var persistedReport = await context.DocumentationReports.SingleAsync(
+            candidate => candidate.ReviewRunId == reviewId);
+        var persistedModelRun = await context.AIModelRuns.SingleAsync(
+            candidate => candidate.Id == modelRunId);
+
+        Assert.Equal(report.Id, persistedReport.Id);
+        Assert.Equal("# Technical report", persistedReport.MarkdownContent);
+        Assert.Equal(modelRunId, persistedReport.ModelRunId);
+        Assert.Equal(AIModelRunPurpose.Documentation, persistedModelRun.Purpose);
+        Assert.Equal(AIModelRunStatus.Succeeded, persistedModelRun.Status);
+    }
+
+    [DatabaseFact]
     public async Task Duplicate_review_report_is_rejected_by_postgresql_unique_constraint()
     {
         await using var context = CreateContext();
